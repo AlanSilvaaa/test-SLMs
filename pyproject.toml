@@ -1,7 +1,39 @@
 [project]
 name = "test-slms"
 version = "0.1.0"
-description = "Add your description here"
+description = "Experimentos reproducibles de generación de problemas matemáticos con SLM"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "psutil>=6,<8",
+    "pydantic>=2.10,<3",
+    "typer>=0.27.3",
+]
+
+[project.optional-dependencies]
+train = [
+    "accelerate>=1,<2",
+    "datasets>=3,<5",
+    "peft>=0.17,<1",
+    "torch>=2.6,<3",
+    "transformers>=4.56,<5",
+]
+infer = [
+    "vllm>=0.11,<0.16",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.11,<1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

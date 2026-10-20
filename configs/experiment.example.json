@@ -1,0 +1,26 @@
+{
+  "model": {
+    "path": "/ruta/absoluta/modelos/SmolLM3-3B",
+    "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO"
+  },
+  "benchmark": "data/benchmark.jsonl",
+  "train": "data/train.jsonl",
+  "validation": "data/validation.jsonl",
+  "demonstrations": "data/demonstrations.json",
+  "skill": "skill/SKILL.md",
+  "output": "output",
+  "seed": 42,
+  "max_model_len": 4096,
+  "max_tokens": 1024,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "repetitions": 1,
+  "chat_template_kwargs": {
+    "enable_thinking": false
+  },
+  "learning_rate": 0.0001,
+  "target_modules": [
+    "all-linear"
+  ],
+  "gpu_memory_utilization": 0.85
+}

@@ -1,0 +1,13 @@
+{
+  "version": "0.1-draft",
+  "status": "draft",
+  "criteria": [
+    {"id": "solvability", "descriptor": "1 si los datos y relaciones del enunciado permiten identificar una única respuesta y verificarla sin suposiciones externas. 0 si faltan datos, hay condiciones incompatibles o varias respuestas igualmente válidas."},
+    {"id": "linguistic_clarity", "descriptor": "1 si la pregunta y las relaciones son comprensibles para el curso y no hay ambigüedades relevantes. 0 si la redacción o el vocabulario impiden comprender la tarea o sus relaciones."},
+    {"id": "contextual_coherence", "descriptor": "1 si datos, acciones, unidades y resultados admisibles son compatibles y plausibles en la situación. 0 ante contradicciones contextuales, unidades incompatibles o resultados sin sentido en ella. No confundir con el ajuste al contexto solicitado."},
+    {"id": "pedagogical_appropriateness", "descriptor": "1 si conocimientos y razonamiento necesarios son apropiados para el curso. 0 si exceden el nivel o la actividad es inadecuada para este. No inferir la demanda solo por la magnitud de los números."},
+    {"id": "curriculum_alignment", "descriptor": "1 si resolver el problema exige conceptos o habilidades evaluables del OA especificado y respeta sus condiciones. 0 si el OA aparece superficialmente o se trabaja un aprendizaje distinto."}
+  ],
+  "solution_descriptor": "Verifica procedimiento, cálculos, razonamiento, respuesta y unidades de la solución propuesta a partir del enunciado. Contrasta críticamente con la solución independiente, que también puede contener errores. Una respuesta correcta no compensa razonamiento incorrecto. No modifiques las puntuaciones del enunciado.",
+  "request_descriptor": "Comprueba por separado si el enunciado utiliza el contexto solicitado y satisface las restricciones adicionales de la solicitud no cubiertas por las cinco dimensiones. No alteres las puntuaciones de esas dimensiones por este resultado."
+}

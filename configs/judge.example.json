@@ -1,0 +1,14 @@
+{
+  "model": {
+    "path": "/ruta/absoluta/modelos/gemma-3-27b-it",
+    "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO"
+  },
+  "benchmark": "data/benchmark.jsonl",
+  "output": "output",
+  "max_model_len": 8192,
+  "max_tokens": 2048,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "chat_template_kwargs": {},
+  "gpu_memory_utilization": 0.85
+}

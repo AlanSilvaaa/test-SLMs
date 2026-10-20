@@ -1,0 +1,78 @@
+"""Explicit, versioned contracts. No ML libraries are imported here."""
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class Contract(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+
+class Request(Contract):
+    id: str = Field(min_length=1)
+    version: int = Field(ge=1)
+    curso: str = Field(min_length=1)
+    codigo_oa: str = Field(min_length=1)
+    texto_oa: str = Field(min_length=1)
+    habilidad_evaluada: str = Field(min_length=1)
+    condiciones_curriculares: str = Field(min_length=1)
+    contexto: str = Field(min_length=1)
+    solicitud: str = Field(min_length=1)
+
+
+class Problem(Contract):
+    enunciado: str = Field(min_length=1)
+    solucion: str = Field(min_length=1)
+
+
+class Example(Request, Problem):
+    procedencia: str = Field(min_length=1)
+    estado: Literal["aceptado"]
+
+
+class Model(Contract):
+    path: str = Field(min_length=1)
+    revision: str = Field(min_length=1)
+
+
+class Experiment(Contract):
+    model: Model
+    benchmark: str
+    train: str = "data/train.jsonl"
+    validation: str = "data/validation.jsonl"
+    demonstrations: str = "data/demonstrations.json"
+    skill: str = "skill/SKILL.md"
+    output: str = "output"
+    seed: int = 42
+    gpu_memory_utilization: float = Field(default=0.85, gt=0, lt=1)
+    max_model_len: int = Field(default=4096, gt=0)
+    max_tokens: int = Field(default=1024, gt=0)
+    temperature: float = Field(default=0.6, ge=0)
+    top_p: float = Field(default=0.95, gt=0, le=1)
+    repetitions: int = Field(default=1, ge=1)
+    chat_template_kwargs: dict = Field(default_factory=dict)
+    adapter: str | None = None
+    adapter_sha256: str | None = None
+    learning_rate: float = Field(default=0.0001, gt=0)
+
+    @model_validator(mode="after")
+    def check_limits(self):
+        if self.max_tokens >= self.max_model_len:
+            raise ValueError("max_tokens debe dejar espacio para la entrada")
+        return self
+
+    target_modules: list[str] = Field(default_factory=lambda: ["all-linear"])
+
+
+class Criterion(Contract):
+    id: str = Field(pattern=r"^[a-z][a-z_]*$")
+    descriptor: str = Field(min_length=1)
+
+
+class Rubric(Contract):
+    version: str
+    status: Literal["draft", "approved"]
+    criteria: list[Criterion] = Field(min_length=5, max_length=5)
+    solution_descriptor: str
+    request_descriptor: str

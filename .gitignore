@@ -8,3 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+__pycache__/
+*.py[oc]
+.venv/
+.ruff_cache/
+.pytest_cache/
+output/
+data/*
+!data/README.md
+.env
+*.safetensors
+checkpoints/
