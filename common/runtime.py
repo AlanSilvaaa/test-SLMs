@@ -9,6 +9,32 @@ import psutil
 from common.files import read_json
 
 
+def validate_torch_runtime(torch):
+    if not torch.version.cuda:
+        raise RuntimeError(
+            f"PyTorch {torch.__version__} es una instalación solo CPU. "
+            "En GX10/ARM64 se requiere el entorno CUDA 13 configurado por el proyecto. "
+            "Actualiza el repositorio y ejecuta uv sync --locked --extra infer"
+        )
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            f"PyTorch {torch.__version__} incluye CUDA {torch.version.cuda}, "
+            "pero no puede acceder a la GPU. Comprueba el controlador y el acceso a la GPU"
+        )
+
+
+def check_inference_runtime():
+    # Device discovery only; no model loading, inference or GPU computation.
+    try:
+        import torch
+    except (ImportError, OSError) as error:
+        raise RuntimeError(
+            "No se pudo importar PyTorch. Prepara las dependencias CUDA del equipo experimental: "
+            "uv sync --locked --extra infer"
+        ) from error
+    validate_torch_runtime(torch)
+
+
 def validate_model(cfg, *, judge):
     catalog = read_json(Path(__file__).resolve().parent.parent / "configs/models.json")
     allowed = [catalog["judge"]] if judge else catalog["generators"]

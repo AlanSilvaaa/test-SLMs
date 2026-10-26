@@ -22,6 +22,9 @@ train = [
 infer = [
     "huggingface-hub>=0.36,<1",
     "pandas>=2,<4",
+    "torch==2.9.1 ; platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "torchaudio==2.9.1 ; platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "torchvision==0.24.1 ; platform_machine == 'aarch64' and sys_platform == 'linux'",
     "vllm==0.15.1",
 ]
 
@@ -34,6 +37,19 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+# GX10/GB10: PyPI's ARM64 torch 2.9.1 is CPU-only. Use the official
+# CUDA 13 builds as a coherent set, without changing the x86_64 environment.
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" }]
+torchvision = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" }]
+torchaudio = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" }]
+vllm = [{ url = "https://github.com/vllm-project/vllm/releases/download/v0.15.1/vllm-0.15.1%2Bcu130-cp38-abi3-manylinux_2_35_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" }]
 
 [tool.ruff]
 line-length = 100

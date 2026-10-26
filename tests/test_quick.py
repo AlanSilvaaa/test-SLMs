@@ -97,6 +97,7 @@ def test_offline_rejects_missing_shard_without_download(tmp_path, monkeypatch):
 
 def test_quick_runs_only_base_with_exact_limit_and_one_repetition(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parent.parent
+    monkeypatch.setattr("common.quick.check_inference_runtime", lambda: None)
     calls = []
     monkeypatch.setattr(
         "common.quick.prepare_model",

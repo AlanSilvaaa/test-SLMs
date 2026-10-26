@@ -82,7 +82,11 @@ uv sync --locked --extra train
 ```
 
 El extra `infer` fija vLLM **0.15.1** y pandas, requerido por su dataset `custom`.
-La compatibilidad con GB10/ARM64 y CUDA debe comprobarse en el hardware experimental.
+En Linux ARM64 selecciona el build oficial **0.15.1+cu130** y PyTorch
+**2.9.1+cu130** desde su índice CUDA 13, junto a torchvision y torchaudio.
+Esto corrige la instalación PyTorch CPU observada en la GX10. Ver la
+[guía de instalación y comprobación de la GX10](docs/gx10-setup.md).
+La ejecución completa con GB10 debe comprobarse en el hardware experimental.
 Si ese entorno necesita otra distribución, actualizar y validar conjuntamente
 comandos, formato de resultados y lockfile; no asumir compatibilidad por cambiar
 solo la versión. `uv sync --locked` sin extras instala herramientas ligeras.

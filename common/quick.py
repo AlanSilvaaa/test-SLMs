@@ -5,6 +5,7 @@ from pathlib import Path
 from common.contracts import Experiment, Request
 from common.files import load_rows
 from common.models import DEFAULT_MODELS_DIR, prepare_model
+from common.runtime import check_inference_runtime
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REQUESTS = ROOT / "examples/smoke/requests.jsonl"
@@ -26,6 +27,7 @@ def run_quick(
             f"Pediste {count} problemas, pero {requests} contiene {len(rows)} solicitudes. "
             "Usa --requests con un archivo que tenga suficientes solicitudes"
         )
+    check_inference_runtime()
     prepared = prepare_model(model, models_dir, revision, offline=offline)
     cfg = Experiment(
         model=prepared,

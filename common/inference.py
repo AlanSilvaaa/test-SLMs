@@ -12,6 +12,7 @@ from pathlib import Path
 
 from common.files import append_jsonl, read_json, write_json
 from common.monitor import MemoryMonitor
+from common.runtime import check_inference_runtime
 
 VLLM_VERSION = "0.15.1"
 HOST = "127.0.0.1"
@@ -221,6 +222,7 @@ class LocalBench:
     """No model inference API or custom HTTP client: invoke vllm commands."""
 
     def __init__(self, cfg, run, *, use_adapter=False):
+        check_inference_runtime()
         try:
             from transformers import AutoTokenizer
         except ImportError as error:
@@ -228,11 +230,13 @@ class LocalBench:
                 "Prepara el equipo experimental con uv sync --extra infer"
             ) from error
 
-        if version("vllm") != VLLM_VERSION:
+        installed = version("vllm")
+        if installed.split("+", 1)[0] != VLLM_VERSION or "+cpu" in installed:
             raise ValueError(f"Este protocolo requiere vLLM {VLLM_VERSION}; revisa el lockfile")
         if not Path(cfg.model.path).is_dir():
             raise ValueError("Se requieren pesos y tokenizador locales")
         self.cfg, self.run, self.use_adapter = cfg, Path(run), use_adapter
+        self.installed_version = installed
         self.tokenizer = AutoTokenizer.from_pretrained(
             cfg.model.path, revision=cfg.model.revision, local_files_only=True
         )
@@ -272,7 +276,7 @@ class LocalBench:
     def metadata(self):
         return {
             "execution": "local_cli",
-            "vllm_version": VLLM_VERSION,
+            "vllm_version": self.installed_version,
             "host": HOST,
             "port": self.port,
             "dtype": "bfloat16",
