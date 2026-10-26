@@ -376,3 +376,43 @@ def test_final_benchmark_does_not_accept_one_request(tmp_path):
     )
     with pytest.raises(ValueError, match="295"):
         build_requests(cfg, "base_model", 0)
+
+
+def test_smollm3_smoke_builds_exactly_five_base_requests_without_benchmark(tmp_path):
+    from common.contracts import Experiment
+    from common.generation import build_requests
+
+    root = Path(__file__).resolve().parent.parent
+    values = read_json(root / "configs/smollm3-smoke.example.json")
+    values["development"] = str(root / values["development"])
+    values["benchmark"] = str(tmp_path / "not-yet-created.jsonl")
+    cfg = Experiment.model_validate(values)
+    built, inputs = build_requests(cfg, "base_model", 0)
+    assert cfg.repetitions == 1
+    assert cfg.model.id == "HuggingFaceTB/SmolLM3-3B"
+    assert len(built) == 5
+    assert len(inputs) == 1
+    assert all(not row["benchmark_separation_checked"] for row in built)
+    assert all(len(row["messages"]) == 2 for row in built)
+    # The relaxation applies only to development, not final benchmark runs.
+    cfg.phase = "benchmark"
+    with pytest.raises(FileNotFoundError):
+        build_requests(cfg, "base_model", 0)
+
+
+def test_smoke_still_checks_separation_if_reserved_benchmark_exists(tmp_path):
+    from common.contracts import Experiment
+    from common.generation import build_requests
+
+    development, benchmark = tmp_path / "development.jsonl", tmp_path / "benchmark.jsonl"
+    append_jsonl(development, request())
+    append_jsonl(benchmark, request())
+    cfg = Experiment(
+        model={"path": "fake", "revision": "abc"},
+        phase="development",
+        development=str(development),
+        benchmark=str(benchmark),
+        repetitions=1,
+    )
+    with pytest.raises(ValueError, match="separados"):
+        build_requests(cfg, "base_model", 0)

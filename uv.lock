@@ -4741,6 +4741,7 @@ dependencies = [
 
 [package.optional-dependencies]
 infer = [
+    { name = "huggingface-hub" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
     { name = "pandas", version = "3.0.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
     { name = "vllm" },
@@ -4763,6 +4764,7 @@ dev = [
 requires-dist = [
     { name = "accelerate", marker = "extra == 'train'", specifier = ">=1,<2" },
     { name = "datasets", marker = "extra == 'train'", specifier = ">=3,<5" },
+    { name = "huggingface-hub", marker = "extra == 'infer'", specifier = ">=0.36,<1" },
     { name = "pandas", marker = "extra == 'infer'", specifier = ">=2,<4" },
     { name = "peft", marker = "extra == 'train'", specifier = ">=0.17,<1" },
     { name = "psutil", specifier = ">=6,<8" },

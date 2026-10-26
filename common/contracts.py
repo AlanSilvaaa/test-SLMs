@@ -54,6 +54,7 @@ class Experiment(Contract):
     model: Model
     benchmark: str
     phase: Literal["benchmark", "development"] = "benchmark"
+    request_limit: int | None = Field(default=None, ge=1)
     development: str = "data/development.jsonl"
     oa_registry: str = "data/oa.json"
     skill_review: str = "configs/skill-review.json"

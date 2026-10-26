@@ -13,6 +13,54 @@ app = typer.Typer(
 )
 
 
+@app.callback(invoke_without_command=True)
+def quick(
+    ctx: typer.Context,
+    count: Annotated[
+        int,
+        typer.Option(
+            "-n", "--num-problems", min=1, help="Cantidad de solicitudes de la prueba base"
+        ),
+    ] = 5,
+    model: Annotated[
+        str, typer.Option("--model", "-model", "-m", help="Alias o modelID; por defecto SmolLM3")
+    ] = "SmolLM3",
+    models_dir: Annotated[
+        Path, typer.Option("--models-dir", help="Caché local de pesos por modelID")
+    ] = Path("/models"),
+    revision: Annotated[
+        str | None, typer.Option("--revision", help="Commit exacto opcional")
+    ] = None,
+    offline: Annotated[
+        bool, typer.Option("--offline", help="Usar solo pesos completos ya locales")
+    ] = False,
+    requests: Annotated[
+        Path,
+        typer.Option(
+            "--requests", exists=True, dir_okay=False, help="Solicitudes de desarrollo JSONL"
+        ),
+    ] = Path(__file__).resolve().parent / "examples/smoke/requests.jsonl",
+    output: Annotated[
+        Path, typer.Option("--output", help="Carpeta de resultados de la prueba")
+    ] = Path("output/smoke"),
+):
+    """Prueba rápida base: uv run main.py -n 5 --model SmolLM3."""
+    if ctx.invoked_subcommand is not None:
+        names = ("count", "model", "models_dir", "revision", "offline", "requests", "output")
+        if any(ctx.get_parameter_source(name).name == "COMMANDLINE" for name in names):
+            raise typer.BadParameter(
+                "Los flags de prueba rápida se usan sin subcomando; "
+                "para el experimento completo usa run --config"
+            )
+        return
+    from common.quick import run_quick
+
+    typer.echo(f"Prueba base: {model}, {count} solicitudes; pesos en {models_dir}.")
+    if not offline:
+        typer.echo("Se reutilizarán los pesos locales; si faltan, se descargarán antes de generar.")
+    typer.echo(run_quick(count, model, models_dir, revision, offline, requests, output))
+
+
 class Module(StrEnum):
     base = "base_model"
     few_shot = "few-shot"

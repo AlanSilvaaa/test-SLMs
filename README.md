@@ -11,10 +11,53 @@ memoria. El benchmark oficial utiliza HTTP sobre loopback; no utiliza Internet,
 proveedores externos, clientes HTTP propios ni la API Python `LLM.generate`.
 No ejecutar entrenamiento, generación ni judge en el computador de desarrollo.
 
+## Prueba rápida con flags
+
+En el computador experimental, desde la raíz del repositorio:
+
+```bash
+uv run --extra infer main.py -n 5 --model SmolLM3
+```
+
+También se aceptan `-model SmolLM3`, `-m SmolLM3` y el ID completo
+`HuggingFaceTB/SmolLM3-3B`. No hace falta editar JSON. Se ejecuta solo la condición
+base en modo desarrollo, una repetición, con las cinco solicitudes sintéticas
+incluidas. Los resultados se guardan en `output/smoke/<ejecución>/`.
+
+Los pesos se buscan primero en **`/models`**, usando la estructura de caché de
+Hugging Face por modelID, por ejemplo:
+
+```text
+/models/models--HuggingFaceTB--SmolLM3-3B/snapshots/<commit>/
+```
+
+Si no hay un snapshot completo, se descarga allí antes de iniciar serve/bench.
+La primera preparación requiere conexión y permisos de escritura en `/models`.
+Después se utiliza la ruta local y se registra el commit exacto resuelto. Si ya
+hay una copia completa, se reutiliza sin consultar la red. Para impedir descargas:
+
+```bash
+uv run --extra infer main.py -n 5 --model SmolLM3 --offline
+```
+
+Otros flags: `--models-dir /otra/carpeta`, `--revision <commit-exacto>`,
+`--requests /ruta/solicitudes.jsonl` y `--output /ruta/resultados`.
+`-n` selecciona las primeras N solicitudes de desarrollo; si el archivo tiene
+menos, se rechaza la ejecución antes de descargar, sin repetir ni inventar entradas.
+Para más de cinco solicitudes hay que proporcionar un archivo suficiente con
+`--requests`. La selección queda registrada como `request_limit` en la configuración
+de salida. El benchmark final no permite limitar solicitudes mediante ese campo.
+
+La descarga preparatoria usa Hugging Face Hub; la generación y la medición siguen
+usando exclusivamente los comandos oficiales locales `vllm serve` y
+`vllm bench serve`. En este computador de desarrollo solo se realizan pruebas sin
+modelos: la descarga y la ejecución corresponden al hardware experimental.
+
 ## Preparación del computador experimental
 
-Python 3.12 y `uv`. Descargar previamente en ese computador los pesos, tokenizadores
-y dependencias. Después, trabajar offline con rutas absolutas locales:
+Python 3.12 y `uv`. Para el flujo con configuración completa, preparar previamente en ese computador
+los pesos, tokenizadores y dependencias. El modo rápido anterior puede descargar
+los pesos faltantes automáticamente. Después, trabajar con rutas absolutas locales:
 
 ```bash
 uv sync --locked --extra infer
@@ -35,6 +78,13 @@ Registrar `model.id` según `configs/models.json`, `model.path` como carpeta loc
 los archivos locales: declarar una revisión no demuestra por sí solo su procedencia.
 
 ## Datos y configuración
+
+Para probar únicamente SmolLM3 base con cinco solicitudes y una repetición,
+seguir [la guía de prueba técnica](examples/smoke/README.md) y usar
+`configs/smollm3-smoke.example.json`. Este flujo de desarrollo no requiere preparar
+el dataset ni el benchmark final; si el archivo reservado existe, sí se comprueba
+la separación. Las cinco solicitudes incluidas son sintéticas y no representan OA
+oficiales. El modo benchmark conserva sus requisitos completos.
 
 Ver [data/README.md](data/README.md). Exportar solo una versión aceptada por candidato:
 

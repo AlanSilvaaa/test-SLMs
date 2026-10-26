@@ -1,0 +1,23 @@
+{
+  "model": {
+    "id": "HuggingFaceTB/SmolLM3-3B",
+    "path": "/models/models--HuggingFaceTB--SmolLM3-3B/snapshots/REEMPLAZAR_POR_COMMIT_DEL_MODELO",
+    "revision": "REEMPLAZAR_POR_COMMIT_EXACTO_DE_40_CARACTERES"
+  },
+  "phase": "development",
+  "benchmark": "data/benchmark.jsonl",
+  "development": "examples/smoke/requests.jsonl",
+  "output": "output/smoke",
+  "repetitions": 1,
+  "seed": 42,
+  "max_model_len": 4096,
+  "max_tokens": 1024,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "chat_template_kwargs": {
+    "enable_thinking": false
+  },
+  "gpu_memory_utilization": 0.85,
+  "port": 8000,
+  "ready_timeout_s": 600
+}

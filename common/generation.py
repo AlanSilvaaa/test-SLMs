@@ -15,11 +15,21 @@ from common.prompts import conversation
 
 
 def build_requests(cfg, module, shots):
-    benchmark = load_rows(cfg.benchmark, Request)
     development = load_rows(cfg.development, Request)
+    benchmark_path = Path(cfg.benchmark)
+    # A smoke test may precede construction of the final reserved benchmark.
+    # If that register exists, always check separation; final runs require it.
+    if cfg.phase == "benchmark" or benchmark_path.exists():
+        benchmark = load_rows(benchmark_path, Request)
+    else:
+        benchmark = []
     validate_development(development, benchmark)
-    inputs = [Path(cfg.benchmark), Path(cfg.development)]
+    inputs = [Path(cfg.development)]
+    if benchmark:
+        inputs.append(benchmark_path)
     if cfg.phase == "benchmark":
+        if cfg.request_limit is not None:
+            raise ValueError("No se permite limitar solicitudes del benchmark final")
         validate_requests(benchmark, cfg.oa_registry)
         inputs.append(Path(cfg.oa_registry))
         if cfg.repetitions < 2:
@@ -27,6 +37,10 @@ def build_requests(cfg, module, shots):
         if not cfg.load_conditions.strip():
             raise ValueError("Registra las condiciones de carga del computador experimental")
     requests = benchmark if cfg.phase == "benchmark" else development
+    if cfg.request_limit is not None:
+        if cfg.request_limit > len(requests):
+            raise ValueError("El límite solicitado supera las solicitudes disponibles")
+        requests = requests[: cfg.request_limit]
     context = {}
     if module == "few-shot":
         train = load_rows(cfg.train, Example)
@@ -79,7 +93,14 @@ def build_requests(cfg, module, shots):
         ordinal = ordinals[row["codigo_oa"]]
         messages, metadata = builder(row, ordinal=ordinal, **context)
         ordinals[row["codigo_oa"]] += 1
-        built.append({"request": row, "messages": messages, **metadata})
+        built.append(
+            {
+                "request": row,
+                "messages": messages,
+                "benchmark_separation_checked": bool(benchmark),
+                **metadata,
+            }
+        )
     return built, inputs
 
 
