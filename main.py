@@ -32,6 +32,12 @@ def quick(
     model: Annotated[
         str, typer.Option("--model", "-model", "-m", help="Alias o modelID; por defecto SmolLM3")
     ] = "SmolLM3",
+    models: Annotated[
+        str | None,
+        typer.Option(
+            "--models", "-models", help="Usa all para ejecutar los seis modelos en secuencia"
+        ),
+    ] = None,
     models_dir: Annotated[
         Path, typer.Option("--models-dir", help="Caché local de pesos por modelID")
     ] = DEFAULT_MODELS_DIR,
@@ -60,6 +66,7 @@ def quick(
         names = (
             "count",
             "model",
+            "models",
             "models_dir",
             "revision",
             "offline",
@@ -75,10 +82,28 @@ def quick(
         return
     from common.quick import run_quick
 
-    typer.echo(f"Prueba base: {model}, {count} solicitudes; pesos en {models_dir}.")
+    selected = [model]
+    if models is not None:
+        if models.casefold() != "all":
+            raise typer.BadParameter("--models solo admite all; para uno usa --model ALIAS")
+        if ctx.get_parameter_source("model").name == "COMMANDLINE":
+            raise typer.BadParameter("Usa --models all o --model ALIAS por separado")
+        if revision is not None:
+            raise typer.BadParameter("--revision corresponde a un solo modelo; usa --model ALIAS")
+        from common.files import read_json
+
+        selected = read_json(Path(__file__).resolve().parent / "configs/models.json")["generators"]
+        typer.echo(f"Prueba base: {len(selected)} modelos, {count} solicitudes por modelo.")
     if not offline:
         typer.echo("Se reutilizarán los pesos locales; si faltan, se descargarán antes de generar.")
-    show_run(run_quick(count, model, models_dir, revision, offline, requests, output, port))
+    for index, selected_model in enumerate(selected, 1):
+        typer.echo(
+            f"[{index}/{len(selected)}] Prueba base: {selected_model}, {count} solicitudes; "
+            f"pesos en {models_dir}."
+        )
+        show_run(
+            run_quick(count, selected_model, models_dir, revision, offline, requests, output, port)
+        )
 
 
 class Module(StrEnum):

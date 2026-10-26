@@ -62,6 +62,23 @@ Cada comando ejecuta un único modelo en condición base. Los alias se definen e
 [`common/models.py`](common/models.py) y se validan contra
 [`configs/models.json`](configs/models.json).
 
+Para ejecutar los seis modelos base, uno después de otro:
+
+```bash
+uv run --extra infer main.py -n 5 -models all
+```
+
+También se acepta `--models all`. `-n` indica solicitudes **por modelo**: este
+ejemplo produce 30 generaciones, con un Excel por modelo. Cada servidor se cierra
+antes de iniciar el siguiente. Si una ejecución falla, el comando se detiene y
+conserva los resultados anteriores. Se aplican los mismos flags `--requests`,
+`--offline`, `--models-dir`, `--output` y `--port` a todos los modelos.
+No combinar `--models all` con `--model` ni con `--revision`, porque cada modelo
+tiene su propio commit. Para más de cinco solicitudes, proporcionar un archivo de
+desarrollo suficiente mediante `--requests` y su cantidad con `-n`.
+Este comando mantiene una repetición en desarrollo; no ejecuta las demás
+estrategias ni el benchmark final.
+
 Los pesos se buscan primero en **`models/` dentro de la raíz del repositorio**,
 independientemente del directorio desde el que se invoque el programa, usando la estructura de caché de
 Hugging Face por modelID, por ejemplo:

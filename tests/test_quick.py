@@ -37,6 +37,57 @@ def test_quick_cli_accepts_requested_syntax_without_config(monkeypatch, flag):
     assert "saved" in result.output
 
 
+@pytest.mark.parametrize("flag", ["-models", "--models"])
+def test_all_models_run_in_catalog_order_with_shared_options(tmp_path, monkeypatch, flag):
+    from common.files import read_json
+
+    calls = []
+    monkeypatch.setattr("common.quick.run_quick", lambda *args: calls.append(args) or "saved")
+    result = CliRunner().invoke(
+        app, ["-n", "3", flag, "all", "--offline", "--output", str(tmp_path), "--port", "8001"]
+    )
+    assert result.exit_code == 0, result.output
+    catalog = read_json(Path(__file__).resolve().parents[1] / "configs/models.json")
+    assert [args[1] for args in calls] == catalog["generators"]
+    assert all(
+        args[0] == 3 and args[4] is True and args[6] == tmp_path and args[7] == 8001
+        for args in calls
+    )
+    assert result.output.count("saved") == 6
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        ["--models", "unknown"],
+        ["--models", "all", "--model", "SmolLM3"],
+        ["--models", "all", "--revision", "a" * 40],
+        ["--models", "all", "export-excel", "--run", "."],
+    ],
+)
+def test_all_models_rejects_ambiguous_options_before_execution(monkeypatch, options):
+    monkeypatch.setattr("common.quick.run_quick", lambda *a: pytest.fail("must not run"))
+    result = CliRunner().invoke(app, options)
+    assert result.exit_code == 2, result.output
+
+
+def test_all_models_stops_after_failure_and_prints_previous_result(monkeypatch):
+    calls = []
+
+    def fake_run(*args):
+        calls.append(args[1])
+        if len(calls) == 2:
+            raise RuntimeError("synthetic failure")
+        return "previous-result"
+
+    monkeypatch.setattr("common.quick.run_quick", fake_run)
+    result = CliRunner().invoke(app, ["-models", "all"])
+    assert result.exit_code != 0
+    assert len(calls) == 2
+    assert "previous-result" in result.output
+    assert calls[-1] in result.output
+
+
 def test_unknown_alias_does_not_download(monkeypatch):
     monkeypatch.setattr("common.models._snapshot_download", lambda **kw: pytest.fail("download"))
     with pytest.raises(ValueError, match="desconocido"):
