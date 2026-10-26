@@ -45,11 +45,23 @@ def quick(
     output: Annotated[
         Path, typer.Option("--output", help="Carpeta de resultados de la prueba")
     ] = Path("output/smoke"),
+    port: Annotated[
+        int, typer.Option("--port", min=1024, max=65535, help="Puerto local de vLLM")
+    ] = 8000,
 ):
     """Prueba rápida base: uv run main.py -n 5 --model SmolLM3."""
     load_repo_env()
     if ctx.invoked_subcommand is not None:
-        names = ("count", "model", "models_dir", "revision", "offline", "requests", "output")
+        names = (
+            "count",
+            "model",
+            "models_dir",
+            "revision",
+            "offline",
+            "requests",
+            "output",
+            "port",
+        )
         if any(ctx.get_parameter_source(name).name == "COMMANDLINE" for name in names):
             raise typer.BadParameter(
                 "Los flags de prueba rápida se usan sin subcomando; "
@@ -61,7 +73,7 @@ def quick(
     typer.echo(f"Prueba base: {model}, {count} solicitudes; pesos en {models_dir}.")
     if not offline:
         typer.echo("Se reutilizarán los pesos locales; si faltan, se descargarán antes de generar.")
-    typer.echo(run_quick(count, model, models_dir, revision, offline, requests, output))
+    typer.echo(run_quick(count, model, models_dir, revision, offline, requests, output, port))
 
 
 class Module(StrEnum):

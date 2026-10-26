@@ -157,3 +157,27 @@ def test_server_failure_keeps_compiler_root_cause_outside_last_100_lines(tmp_pat
     assert "fatal error: Python.h" in message
     assert str(log) in message
     assert "código 1" in message
+
+
+def test_busy_port_fails_with_actionable_message_without_stopping_any_process(monkeypatch):
+    import errno
+
+    from common.inference import check_local_port
+
+    class BusySocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def setsockopt(self, *args):
+            pass
+
+        def bind(self, address):
+            assert address == ("127.0.0.1", 8000)
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+
+    monkeypatch.setattr("common.inference.socket.socket", BusySocket)
+    with pytest.raises(RuntimeError, match="--port 8001"):
+        check_local_port(8000)

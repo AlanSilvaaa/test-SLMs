@@ -34,6 +34,19 @@ parámetros de entrenamiento, decodificación, prompts ni métricas experimental
 
 ## Reparación en el computador experimental
 
+También se observó un fallo de compilación de Triton con
+`fatal error: Python.h: No such file or directory`. El compilador GCC estaba
+disponible, pero faltaban las cabeceras de Python 3.12 del sistema. Instalarlas
+en la GX10 con Ubuntu antes de ejecutar el modelo:
+
+```bash
+sudo apt update
+sudo apt install python3.12-dev
+```
+
+Comprobar que existe `/usr/include/python3.12/Python.h`. Este requisito del sistema
+no lo instala `uv sync` ni exige volver a descargar los pesos.
+
 Con esta versión del repositorio actualizada en la GX10:
 
 ```bash
@@ -63,6 +76,19 @@ antes de preparar descargas y al iniciar el backend. Si aparece otro error de
 bibliotecas o kernels, conservar la salida y `serve.log`: aún debe validarse la
 ejecución completa en ese equipo, sin asumir que resolver el import garantiza
 compatibilidad de la generación.
+
+## Puerto ocupado
+
+Si aparece `Address already in use`, comprobar el puerto local por defecto:
+
+```bash
+ss -ltnp 'sport = :8000'
+```
+
+Detener únicamente una ejecución propia identificada que ya no se necesite, o
+conservar el servicio y usar `--port 8001` (si está libre). El flag configura tanto
+serve como bench. Si otro vLLM sigue cargado, elegir otro puerto no libera su
+memoria GPU; hay que tenerlo en cuenta antes de ejecutar dos modelos a la vez.
 
 ## Fuentes oficiales verificadas
 

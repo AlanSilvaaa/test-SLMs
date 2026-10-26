@@ -1,5 +1,6 @@
 """Official vLLM CLI processes, restricted to this experimental computer."""
 
+import errno
 import json
 import math
 import os
@@ -17,6 +18,22 @@ from common.runtime import check_inference_runtime
 
 VLLM_VERSION = "0.15.1"
 HOST = "127.0.0.1"
+
+
+def check_local_port(port):
+    try:
+        with socket.socket() as sock:
+            # Match the server's reuse policy: TIME_WAIT is not a listener.
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((HOST, port))
+    except OSError as error:
+        if error.errno == errno.EADDRINUSE:
+            raise RuntimeError(
+                f"El puerto {HOST}:{port} está ocupado. "
+                "Usa --port 8001 en la prueba rápida o cambia port en la configuración. "
+                f"Para identificar el proceso: ss -ltnp 'sport = :{port}'"
+            ) from error
+        raise
 
 
 def offline_environment():
@@ -320,8 +337,7 @@ class LocalBench:
 
     def start(self):
         # Fail on an occupied port rather than benchmarking an unrelated service.
-        with socket.socket() as sock:
-            sock.bind((HOST, self.port))
+        check_local_port(self.port)
         command = serve_command(self.cfg, self.port, self.use_adapter)
         append_jsonl(self.run / "commands.jsonl", {"role": "serve", "argv": command})
         self.log = (self.run / "serve.log").open("x", encoding="utf-8")

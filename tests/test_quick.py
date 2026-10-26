@@ -98,6 +98,7 @@ def test_offline_rejects_missing_shard_without_download(tmp_path, monkeypatch):
 def test_quick_runs_only_base_with_exact_limit_and_one_repetition(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parent.parent
     monkeypatch.setattr("common.quick.check_inference_runtime", lambda: None)
+    monkeypatch.setattr("common.quick.check_local_port", lambda port: None)
     calls = []
     monkeypatch.setattr(
         "common.quick.prepare_model",
@@ -134,3 +135,11 @@ def test_default_model_cache_is_inside_repository_even_from_another_directory(
     monkeypatch.chdir(tmp_path)
     assert DEFAULT_MODELS_DIR == root / "models"
     assert DEFAULT_MODELS_DIR != Path("/models")
+
+
+def test_quick_cli_forwards_alternative_port(monkeypatch):
+    calls = []
+    monkeypatch.setattr("common.quick.run_quick", lambda *args: calls.append(args) or "saved")
+    result = CliRunner().invoke(app, ["-n", "5", "--model", "SmolLM3", "--port", "8001"])
+    assert result.exit_code == 0, result.output
+    assert calls[0][-1] == 8001

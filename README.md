@@ -57,7 +57,11 @@ uv run --extra infer main.py -n 5 --model SmolLM3 --offline
 ```
 
 Otros flags: `--models-dir /otra/carpeta`, `--revision <commit-exacto>`,
-`--requests /ruta/solicitudes.jsonl` y `--output /ruta/resultados`.
+`--requests /ruta/solicitudes.jsonl`, `--output /ruta/resultados` y `--port 8001`.
+Si el puerto 8000 está ocupado, identificar el proceso con
+`ss -ltnp 'sport = :8000'`. Solo detenerlo si corresponde a una ejecución propia
+que ya no se necesita; para conservar otro servicio, elegir un puerto libre con
+`--port`. El programa no conecta el benchmark a un servidor ajeno ni lo termina.
 `-n` selecciona las primeras N solicitudes de desarrollo; si el archivo tiene
 menos, se rechaza la ejecución antes de descargar, sin repetir ni inventar entradas.
 Para más de cinco solicitudes hay que proporcionar un archivo suficiente con
@@ -70,6 +74,14 @@ usando exclusivamente los comandos oficiales locales `vllm serve` y
 modelos: la descarga y la ejecución corresponden al hardware experimental.
 
 ## Preparación del computador experimental
+
+En la GX10 con Ubuntu y Python 3.12 del sistema, instalar las cabeceras antes
+de ejecutar vLLM. Triton compila extensiones que requieren `Python.h`:
+
+```bash
+sudo apt update
+sudo apt install python3.12-dev
+```
 
 Python 3.12 y `uv`. Para el flujo con configuración completa, preparar previamente en ese computador
 los pesos, tokenizadores y dependencias. El modo rápido anterior puede descargar

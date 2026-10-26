@@ -4,6 +4,7 @@ from pathlib import Path
 
 from common.contracts import Experiment, Request
 from common.files import load_rows
+from common.inference import check_local_port
 from common.models import DEFAULT_MODELS_DIR, prepare_model
 from common.runtime import check_inference_runtime
 
@@ -19,6 +20,7 @@ def run_quick(
     offline=False,
     requests=DEFAULT_REQUESTS,
     output=Path("output/smoke"),
+    port=8000,
 ):
     # Validate input count before any possible download or GPU operation.
     rows = load_rows(requests, Request)
@@ -28,6 +30,7 @@ def run_quick(
             "Usa --requests con un archivo que tenga suficientes solicitudes"
         )
     check_inference_runtime()
+    check_local_port(port)
     prepared = prepare_model(model, models_dir, revision, offline=offline)
     cfg = Experiment(
         model=prepared,
@@ -37,6 +40,7 @@ def run_quick(
         request_limit=count,
         output=str(Path(output).resolve()),
         repetitions=1,
+        port=port,
         chat_template_kwargs={"enable_thinking": False} if "SmolLM3" in prepared.id else {},
     )
     from common.generation import infer
