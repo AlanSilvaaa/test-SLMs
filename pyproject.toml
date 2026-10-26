@@ -19,7 +19,8 @@ train = [
     "transformers>=4.56,<5",
 ]
 infer = [
-    "vllm>=0.11,<0.16",
+    "pandas>=2,<4",
+    "vllm==0.15.1",
 ]
 
 [dependency-groups]

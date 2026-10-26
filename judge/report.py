@@ -1,16 +1,24 @@
 """Keep missing judgments visible and preserve the protocol's denominators."""
 
+from common.contracts import DIMENSIONS
 from common.files import load_rows, write_json
 
 
 def summarize(source, output):
     rows = load_rows(source)
+    versions = {r.get("rubric_version") for r in rows}
+    if len(versions) > 1:
+        raise ValueError("No se pueden mezclar versiones de rúbrica en un resumen")
     total = len(rows)
-    criteria = sorted({k for r in rows if r.get("statement") for k in r["statement"]})
+    criteria = DIMENSIONS
     result = {
         "total_generations": total,
         "evaluation_errors": sum(bool(r["error"]) for r in rows),
-        "joint_pass": {"passed": sum(r["joint_pass"] is True for r in rows), "denominator": total},
+        "joint_pass": {
+            "passed": sum(r["joint_pass"] is True for r in rows),
+            "denominator": total,
+            "missing": sum(r["joint_pass"] is None for r in rows),
+        },
         "dimensions": {},
     }
     for criterion in criteria:
@@ -20,6 +28,18 @@ def summarize(source, output):
             "denominator": total,
             "missing": total - len(assessed),
         }
+    compliance = [r["statement"]["request_compliance"]["score"] for r in rows if r.get("statement")]
+    result["request_compliance"] = {
+        "passed": sum(compliance),
+        "denominator": total,
+        "missing": total - len(compliance),
+    }
+    result["by_model_strategy"] = {}
+    for row in rows:
+        key = str((row.get("generator"), row.get("module"), row.get("shots")))
+        group = result["by_model_strategy"].setdefault(key, {"total": 0, "joint_passed": 0})
+        group["total"] += 1
+        group["joint_passed"] += row["joint_pass"] is True
     resolvable = [
         r for r in rows if r.get("statement", {}) and r["statement"]["solvability"]["score"] == 1
     ]
@@ -33,11 +53,19 @@ def summarize(source, output):
     write_json(output, result)
 
 
-def export_human(source, output):
+def export_human(source, output, *, sample=False):
     """Blind statement form. Solution review is a separate file opened afterwards."""
     import csv
 
-    rows = load_rows(source)
+    from judge.sampling import sample_generations
+
+    sources = source if isinstance(source, list) else [source]
+    rows = []
+    for path in sources:
+        for index, row in enumerate(load_rows(path)):
+            rows.append({**row, "source_file": str(path), "source_index": index})
+    if sample:
+        rows = sample_generations(rows)
     output.mkdir(parents=True, exist_ok=False)
     for name in ("statements", "solutions", "private_mapping"):
         records = []
@@ -48,7 +76,7 @@ def export_human(source, output):
                     {
                         "blind_id": key,
                         **row["request"],
-                        "enunciado": row.get("problem", {}).get("enunciado", ""),
+                        "enunciado": (row.get("problem") or {}).get("enunciado", ""),
                         "evaluador": "",
                         "rubric_version": "",
                         "solvability": "",
@@ -64,7 +92,7 @@ def export_human(source, output):
                 records.append(
                     {
                         "blind_id": key,
-                        "solucion": row.get("problem", {}).get("solucion", ""),
+                        "solucion": (row.get("problem") or {}).get("solucion", ""),
                         "solucion_independiente": "",
                         "solution_accuracy": "",
                         "incumplimientos": "",
@@ -74,7 +102,8 @@ def export_human(source, output):
                 records.append(
                     {
                         "blind_id": key,
-                        "generation_index": index,
+                        "generation_index": row["source_index"],
+                        "source_file": row["source_file"],
                         "model": str(row.get("model")),
                         "module": row.get("module"),
                         "shots": row.get("shots"),

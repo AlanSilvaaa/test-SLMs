@@ -10,6 +10,10 @@ def load_config(path: Path) -> Experiment:
     root = path.resolve().parent.parent
     for name in (
         "benchmark",
+        "development",
+        "oa_registry",
+        "skill_review",
+        "judge_review",
         "train",
         "validation",
         "demonstrations",

@@ -6,7 +6,7 @@ from collections import Counter
 from pathlib import Path
 
 from common.contracts import Example, Request
-from common.data import validate_separation
+from common.data import validate_development, validate_requests, validate_separation
 from common.files import load_rows, new_run, read_json, write_json
 from common.prompts import SYSTEM, user_prompt
 
@@ -58,6 +58,15 @@ class ResponseCollator:
 
 
 def train(cfg):
+    from common.runtime import validate_model
+
+    validate_model(cfg, judge=False)
+    if cfg.seed != 42 or cfg.learning_rate not in {0.00005, 0.0001, 0.0002}:
+        raise ValueError("LoRA requiere semilla 42 y una de las tres learning rates")
+    if cfg.target_modules != ["all-linear"]:
+        raise ValueError("El protocolo requiere atención y MLP completos: all-linear")
+    if not cfg.container_image.strip():
+        raise ValueError("Registra la identidad del contenedor de entrenamiento")
     # Lazy imports keep --help, data preparation and tests independent of CUDA.
     import torch
     from datasets import Dataset
@@ -73,7 +82,11 @@ def train(cfg):
     train_rows = load_rows(cfg.train, Example)
     validation_rows = load_rows(cfg.validation, Example)
     requests = load_rows(cfg.benchmark, Request)
+    validate_requests(requests, cfg.oa_registry)
+    development = load_rows(cfg.development, Request)
+    validate_development(development, requests)
     validate_separation(train_rows, validation_rows, requests)
+    validate_separation(train_rows, validation_rows, development)
     train_counts = Counter(r["codigo_oa"] for r in train_rows)
     validation_counts = Counter(r["codigo_oa"] for r in validation_rows)
     if len(train_counts) != 59 or set(train_counts) != set(validation_counts):
@@ -100,7 +113,13 @@ def train(cfg):
         cfg.output,
         "lora-train",
         cfg.model_dump(),
-        [Path(cfg.train), Path(cfg.validation), Path(cfg.benchmark)],
+        [
+            Path(cfg.train),
+            Path(cfg.validation),
+            Path(cfg.benchmark),
+            Path(cfg.development),
+            Path(cfg.oa_registry),
+        ],
     )
     write_json(
         run / "mask_audit.json",
@@ -188,13 +207,23 @@ def train(cfg):
         processing_class=tokenizer,
         data_collator=ResponseCollator(tokenizer),
     )
-    trainer.train()
+    import warnings
+
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        try:
+            trainer.train()
+        finally:
+            write_json(
+                run / "warnings.json",
+                [{"category": w.category.__name__, "message": str(w.message)} for w in captured],
+            )
     adapter = run / "adapter"
     model.save_pretrained(adapter)
     tokenizer.save_pretrained(adapter)
     write_json(
         adapter / "provenance.json",
-        {"base_revision": cfg.model.revision, "base_path": cfg.model.path},
+        {"base_revision": cfg.model.revision, "base_path": cfg.model.path, "base_id": cfg.model.id},
     )
     trainer.save_state()
     best = min(

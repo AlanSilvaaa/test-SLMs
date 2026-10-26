@@ -95,13 +95,14 @@ def summarize(
 
 @app.command("export-human")
 def export_human(
-    source: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    source: Annotated[list[Path], typer.Option(exists=True, dir_okay=False)],
     output: Annotated[Path, typer.Option()],
+    sample: Annotated[bool, typer.Option("--sample/--all")] = True,
 ):
     """Exporta formularios separados y un mapa privado para revisión docente."""
     from judge.report import export_human as export
 
-    export(source, output)
+    export(source, output, sample=sample)
     typer.echo(output)
 
 
@@ -114,6 +115,34 @@ def import_benchmark(
     from common.import_benchmark import convert
 
     convert(source, output)
+    typer.echo(output)
+
+
+@app.command("sample-dataset")
+def sample_dataset(
+    train: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    validation: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    demonstrations: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option()],
+):
+    """Selecciona los 118 problemas para la revisión docente del dataset."""
+    from judge.sampling import sample_dataset as sample
+
+    sample(train, validation, demonstrations, output)
+    typer.echo(output)
+
+
+@app.command("agreement")
+def agreement(
+    judge: Annotated[list[Path], typer.Option(exists=True, dir_okay=False)],
+    human: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    mapping: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option()],
+):
+    """Compara revisiones independientes sin sobrescribir los originales."""
+    from judge.agreement import compare
+
+    compare(judge, human, mapping, output)
     typer.echo(output)
 
 

@@ -1,7 +1,8 @@
 {
   "model": {
     "path": "/ruta/absoluta/modelos/gemma-3-27b-it",
-    "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO"
+    "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO",
+    "id": "google/gemma-3-27b-it"
   },
   "benchmark": "data/benchmark.jsonl",
   "output": "output",
@@ -10,5 +11,13 @@
   "temperature": 0.0,
   "top_p": 1.0,
   "chat_template_kwargs": {},
-  "gpu_memory_utilization": 0.85
+  "gpu_memory_utilization": 0.85,
+  "phase": "benchmark",
+  "development": "data/development.jsonl",
+  "oa_registry": "data/oa.json",
+  "port": 8000,
+  "ready_timeout_s": 600,
+  "load_conditions": "REEMPLAZAR: procesos activos y condiciones del equipo",
+  "container_image": "REEMPLAZAR: imagen y digest del contenedor",
+  "judge_review": "configs/judge-review.json"
 }

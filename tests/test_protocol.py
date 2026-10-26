@@ -179,7 +179,8 @@ def test_draft_judge_never_connects(tmp_path):
         evaluate(cfg, tmp_path / "missing.jsonl", rubric)
 
 
-def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch):
+@pytest.mark.parametrize("proposed", ["SECRET_SOLUTION", None, ""])
+def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch, proposed):
     from common.contracts import Experiment
     from common.files import write_json
     from judge.evaluate import evaluate
@@ -195,14 +196,18 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch):
             "request": request(),
             "repetition": 0,
             "model": "SECRET_MODEL",
-            "problem": {"enunciado": "¿Cuánto es 2 + 3?", "solucion": "SECRET_SOLUTION"},
+            "phase": "development",
+            "problem": {"enunciado": "¿Cuánto es 2 + 3?", "solucion": proposed},
             "error": None,
         },
     )
     calls = []
 
     class FakeJudge:
-        def __init__(self, cfg):
+        def __init__(self, cfg, run):
+            pass
+
+        def start(self):
             pass
 
         def metadata(self):
@@ -219,31 +224,35 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch):
             calls.append(text)
             if len(calls) == 1:
                 value = {key: {"score": 1, "reason": ""} for key in schema["required"]}
-            elif len(calls) == 2:
-                value = {"solucion_independiente": "2 + 3 = 5"}
             else:
                 value = {
+                    "solucion_independiente": "2 + 3 = 5",
                     "solution_accuracy": {
                         "score": 0,
                         "reason": "La propuesta no contiene procedimiento",
-                    }
+                    },
                 }
             return {"raw_response": json.dumps(value), "finish_reason": "stop"}
 
-    monkeypatch.setattr("judge.evaluate.LocalVLLM", FakeJudge)
+    monkeypatch.setattr("judge.evaluate.LocalBench", FakeJudge)
+    monkeypatch.setattr("judge.evaluate.validate_model", lambda *args, **kwargs: None)
     cfg = Experiment(
         model={"path": "test", "revision": "abc"},
         benchmark="unused",
+        phase="development",
         output=str(tmp_path / "output"),
     )
     run = evaluate(cfg, source, rubric_path)
     record = load_rows(run / "evaluations.jsonl")[0]
     assert record["joint_pass"] is True
     assert record["solution"]["score"] == 0
-    assert len(calls) == 3
+    assert len(calls) == 2
     assert all("SECRET_MODEL" not in text for text in calls)
-    assert all("SECRET_SOLUTION" not in text for text in calls[:2])
-    assert "SECRET_SOLUTION" in calls[2]
+    assert all("SECRET_SOLUTION" not in text for text in calls[:1])
+    if proposed:
+        assert "SECRET_SOLUTION" in calls[1]
+    else:
+        assert record["solution"]["reason"] == "Solución propuesta ausente"
 
 
 def test_lora_selection_tie_breaks_and_dataset_identity(tmp_path):
@@ -279,3 +288,91 @@ def test_lora_selection_tie_breaks_and_dataset_identity(tmp_path):
     )
     with pytest.raises(ValueError, match="no comparten"):
         select(runs, tmp_path / "invalid.json")
+
+
+def test_different_versions_of_same_candidate_cannot_cross_splits():
+    original = example()
+    revised = {**original, "version": 2, "enunciado": "Una reformulación con otros datos"}
+    with pytest.raises(ValueError, match="IDs o versiones"):
+        validate_separation([original], [revised], [request()])
+    with pytest.raises(ValueError, match="IDs o versiones"):
+        validate_separation([original, revised], [], [request()])
+
+
+def test_generated_solution_may_be_missing_but_training_solution_may_not():
+    from common.contracts import GeneratedProblem
+
+    for solution in (None, ""):
+        assert GeneratedProblem(enunciado="Un enunciado", solucion=solution).enunciado
+        with pytest.raises(ValueError):
+            Example.model_validate({**example(), "solucion": solution})
+
+
+def test_report_keeps_request_compliance_separate_and_missing_visible(tmp_path):
+    from common.contracts import DIMENSIONS
+    from judge.report import summarize
+
+    source, output = tmp_path / "input.jsonl", tmp_path / "summary.json"
+    statement = {k: {"score": 1, "reason": ""} for k in (*DIMENSIONS, "request_compliance")}
+    append_jsonl(
+        source,
+        {"statement": statement, "joint_pass": True, "solution": {"score": 0}, "error": None},
+    )
+    append_jsonl(
+        source, {"statement": None, "joint_pass": None, "solution": None, "error": "parse error"}
+    )
+    summarize(source, output)
+    result = read_json(output)
+    assert set(result["dimensions"]) == set(DIMENSIONS)
+    assert result["request_compliance"] == {"passed": 1, "denominator": 2, "missing": 1}
+    assert result["joint_pass"] == {"passed": 1, "denominator": 2, "missing": 1}
+    assert result["solution_accuracy"]["denominator"] == 1
+
+
+def test_development_cannot_reuse_reserved_request():
+    from common.data import validate_development
+
+    with pytest.raises(ValueError, match="separados"):
+        validate_development([{**request(), "version": 2}], [request()])
+
+
+def test_final_benchmark_does_not_accept_one_request(tmp_path):
+    from common.contracts import Experiment
+    from common.files import write_json
+    from common.generation import build_requests
+
+    benchmark, development, registry = [
+        tmp_path / name for name in ("benchmark.jsonl", "development.jsonl", "oa.json")
+    ]
+    append_jsonl(benchmark, request())
+    append_jsonl(development, request("development"))
+    # A valid register still cannot legitimize an incomplete benchmark.
+    objectives = []
+    distribution = [
+        (3, 1, 0, 0),
+        (4, 1, 0, 0),
+        (6, 2, 0, 0),
+        (9, 3, 1, 0),
+        (12, 2, 1, 3),
+        (8, 2, 1, 0),
+    ]
+    for course, counts in enumerate(distribution, 1):
+        for axis, count in zip(("numeros", "medicion", "patrones", "datos"), counts):
+            for i in range(count):
+                objectives.append(
+                    {
+                        "codigo_oa": f"{course}-{axis}-{i}",
+                        "curso": str(course),
+                        "eje": axis,
+                        "texto_oa": "Texto OA",
+                    }
+                )
+    write_json(registry, {"status": "approved", "version": "1", "objectives": objectives})
+    cfg = Experiment(
+        model={"path": "fake", "revision": "abc"},
+        benchmark=str(benchmark),
+        development=str(development),
+        oa_registry=str(registry),
+    )
+    with pytest.raises(ValueError, match="295"):
+        build_requests(cfg, "base_model", 0)

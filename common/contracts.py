@@ -4,6 +4,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+DIMENSIONS = (
+    "solvability",
+    "linguistic_clarity",
+    "contextual_coherence",
+    "pedagogical_appropriateness",
+    "curriculum_alignment",
+)
+
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
@@ -26,12 +34,18 @@ class Problem(Contract):
     solucion: str = Field(min_length=1)
 
 
+class GeneratedProblem(Contract):
+    enunciado: str = Field(min_length=1)
+    solucion: str | None = None
+
+
 class Example(Request, Problem):
     procedencia: str = Field(min_length=1)
     estado: Literal["aceptado"]
 
 
 class Model(Contract):
+    id: str | None = None
     path: str = Field(min_length=1)
     revision: str = Field(min_length=1)
 
@@ -39,6 +53,15 @@ class Model(Contract):
 class Experiment(Contract):
     model: Model
     benchmark: str
+    phase: Literal["benchmark", "development"] = "benchmark"
+    development: str = "data/development.jsonl"
+    oa_registry: str = "data/oa.json"
+    skill_review: str = "configs/skill-review.json"
+    judge_review: str = "configs/judge-review.json"
+    port: int = Field(default=8000, ge=1024, le=65535)
+    ready_timeout_s: int = Field(default=600, gt=0)
+    load_conditions: str = ""
+    container_image: str = ""
     train: str = "data/train.jsonl"
     validation: str = "data/validation.jsonl"
     demonstrations: str = "data/demonstrations.json"
@@ -50,7 +73,7 @@ class Experiment(Contract):
     max_tokens: int = Field(default=1024, gt=0)
     temperature: float = Field(default=0.6, ge=0)
     top_p: float = Field(default=0.95, gt=0, le=1)
-    repetitions: int = Field(default=1, ge=1)
+    repetitions: int = Field(default=3, ge=1)
     chat_template_kwargs: dict = Field(default_factory=dict)
     adapter: str | None = None
     adapter_sha256: str | None = None

@@ -4741,6 +4741,8 @@ dependencies = [
 
 [package.optional-dependencies]
 infer = [
+    { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
+    { name = "pandas", version = "3.0.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
     { name = "vllm" },
 ]
 train = [
@@ -4761,13 +4763,14 @@ dev = [
 requires-dist = [
     { name = "accelerate", marker = "extra == 'train'", specifier = ">=1,<2" },
     { name = "datasets", marker = "extra == 'train'", specifier = ">=3,<5" },
+    { name = "pandas", marker = "extra == 'infer'", specifier = ">=2,<4" },
     { name = "peft", marker = "extra == 'train'", specifier = ">=0.17,<1" },
     { name = "psutil", specifier = ">=6,<8" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "torch", marker = "extra == 'train'", specifier = ">=2.6,<3" },
     { name = "transformers", marker = "extra == 'train'", specifier = ">=4.56,<5" },
     { name = "typer", specifier = ">=0.27.3" },
-    { name = "vllm", marker = "extra == 'infer'", specifier = ">=0.11,<0.16" },
+    { name = "vllm", marker = "extra == 'infer'", specifier = "==0.15.1" },
 ]
 provides-extras = ["train", "infer"]
 

@@ -1,7 +1,8 @@
 {
   "model": {
     "path": "/ruta/absoluta/modelos/SmolLM3-3B",
-    "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO"
+    "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO",
+    "id": "HuggingFaceTB/SmolLM3-3B"
   },
   "benchmark": "data/benchmark.jsonl",
   "train": "data/train.jsonl",
@@ -14,7 +15,7 @@
   "max_tokens": 1024,
   "temperature": 0.6,
   "top_p": 0.95,
-  "repetitions": 1,
+  "repetitions": 3,
   "chat_template_kwargs": {
     "enable_thinking": false
   },
@@ -22,5 +23,13 @@
   "target_modules": [
     "all-linear"
   ],
-  "gpu_memory_utilization": 0.85
+  "gpu_memory_utilization": 0.85,
+  "phase": "benchmark",
+  "development": "data/development.jsonl",
+  "oa_registry": "data/oa.json",
+  "port": 8000,
+  "ready_timeout_s": 600,
+  "load_conditions": "REEMPLAZAR: procesos activos y condiciones del equipo",
+  "container_image": "REEMPLAZAR: imagen y digest del contenedor",
+  "skill_review": "configs/skill-review.json"
 }

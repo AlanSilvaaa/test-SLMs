@@ -3,6 +3,7 @@
 import hashlib
 import json
 import platform
+import shutil
 import sys
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
@@ -57,20 +58,34 @@ def new_run(root, label, config, inputs):
     run = Path(root) / f"{stamp}-{label}-{uuid4().hex[:8]}"
     run.mkdir(parents=True, exist_ok=False)
     packages = {}
-    for name in ("vllm", "torch", "transformers", "peft", "pydantic"):
+    for name in ("vllm", "torch", "transformers", "peft", "trl", "pydantic", "pandas"):
         try:
             packages[name] = version(name)
         except PackageNotFoundError:
             pass
+    model = config.get("model")
+    if isinstance(model, dict) and Path(model.get("path", "")).is_dir():
+        # Preserve a fingerprint of the actual local files, including the weights.
+        inputs = list(inputs) + [
+            p
+            for p in sorted(Path(model["path"]).rglob("*"))
+            if p.is_file() and ".cache" not in p.parts
+        ]
     root = Path(__file__).resolve().parent.parent
     sources = [root / "main.py", root / "pyproject.toml", root / "uv.lock"]
     for directory in ("common", "base_model", "few_shot", "skill", "lora", "judge"):
         sources.extend((root / directory).glob("*.py"))
+    for source in sorted(sources):
+        if source.is_file():
+            target = run / "source" / source.relative_to(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
     write_json(
         run / "manifest.json",
         {
             "created_utc": stamp,
             "config": config,
+            "trl": "not_used; Transformers Trainer with explicit response masks",
             "python": sys.version,
             "platform": platform.platform(),
             "packages": packages,
@@ -80,4 +95,7 @@ def new_run(root, label, config, inputs):
             },
         },
     )
+    from common.runtime import hardware_metadata
+
+    write_json(run / "hardware-host.json", hardware_metadata())
     return run

@@ -1,142 +1,359 @@
-"""Run vLLM directly in the current computer, without an HTTP service."""
+"""Official vLLM CLI processes, restricted to this experimental computer."""
 
-import gc
+import json
+import math
+import os
+import signal
+import socket
+import subprocess
+import time
+from importlib.metadata import version
 from pathlib import Path
-from time import perf_counter
+
+from common.files import append_jsonl, read_json, write_json
+from common.monitor import MemoryMonitor
+
+VLLM_VERSION = "0.15.1"
+HOST = "127.0.0.1"
 
 
-class LocalVLLM:
-    """Share local model loading, tokenization and generation across experiments."""
+def offline_environment():
+    env = os.environ.copy()
+    env.update(
+        HF_HUB_OFFLINE="1",
+        TRANSFORMERS_OFFLINE="1",
+        NO_PROXY="127.0.0.1,localhost",
+        no_proxy="127.0.0.1,localhost",
+        VLLM_NO_USAGE_STATS="1",
+        DO_NOT_TRACK="1",
+    )
+    for name in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        env.pop(name, None)
+    # The official benchmark reads this variable even for a local server.
+    env.pop("OPENAI_API_KEY", None)
+    return env
 
-    def __init__(self, cfg, *, use_adapter=False):
-        # Lightweight commands and unit tests do not require CUDA or vLLM.
+
+def serve_command(cfg, port, use_adapter=False):
+    command = [
+        "vllm",
+        "serve",
+        cfg.model.path,
+        "--host",
+        HOST,
+        "--port",
+        str(port),
+        "--revision",
+        cfg.model.revision,
+        "--tokenizer-revision",
+        cfg.model.revision,
+        "--dtype",
+        "bfloat16",
+        "--max-model-len",
+        str(cfg.max_model_len),
+        "--gpu-memory-utilization",
+        str(cfg.gpu_memory_utilization),
+        "--tensor-parallel-size",
+        "1",
+        "--max-num-seqs",
+        "1",
+        "--seed",
+        str(cfg.seed),
+        "--generation-config",
+        "vllm",
+        "--no-enable-prefix-caching",
+    ]
+    if use_adapter:
+        command += [
+            "--enable-lora",
+            "--max-lora-rank",
+            "16",
+            "--lora-modules",
+            f"math={cfg.adapter}",
+        ]
+    return command
+
+
+def bench_command(
+    cfg, port, dataset, result, count, seed, temperature, schema=None, use_adapter=False
+):
+    body = {"seed": seed, "add_special_tokens": False}
+    if schema is not None:
+        body["structured_outputs"] = {"json": schema}
+    command = [
+        "vllm",
+        "bench",
+        "serve",
+        "--host",
+        HOST,
+        "--port",
+        str(port),
+        "--backend",
+        "vllm",
+        "--endpoint",
+        "/v1/completions",
+        "--model",
+        cfg.model.path,
+        "--tokenizer",
+        cfg.model.path,
+        "--tokenizer-mode",
+        "hf",
+        "--dataset-name",
+        "custom",
+        "--dataset-path",
+        str(dataset),
+        "--skip-chat-template",
+        "--disable-shuffle",
+        "--no-oversample",
+        "--num-prompts",
+        str(count),
+        "--custom-output-len",
+        str(cfg.max_tokens),
+        "--max-concurrency",
+        "1",
+        "--request-rate",
+        "inf",
+        "--seed",
+        str(seed),
+        "--temperature",
+        str(temperature),
+        "--top-p",
+        str(cfg.top_p),
+        "--extra-body",
+        json.dumps(body),
+        "--save-result",
+        "--save-detailed",
+        "--result-dir",
+        str(result.parent),
+        "--result-filename",
+        result.name,
+        "--percentile-metrics",
+        "ttft,tpot,itl,e2el",
+        "--metric-percentiles",
+        "50,95,99",
+        "--ready-check-timeout-sec",
+        str(cfg.ready_timeout_s),
+        "--num-warmups",
+        "0",
+    ]
+    if use_adapter:
+        # The single registered module is selected for EVERY request, including
+        # the benchmark's initial readiness request. Do not use random modules.
+        command += ["--served-model-name", "math"]
+    return command
+
+
+def read_detailed(result, input_counts, max_tokens):
+    """v0.15.1 detailed arrays are in input order, including failed requests."""
+    fields = ("generated_texts", "errors", "ttfts", "itls", "output_lens", "input_lens")
+    count = len(input_counts)
+    if any(not isinstance(result.get(k), list) or len(result[k]) != count for k in fields):
+        raise ValueError("Resultado bench incompleto o incompatible: faltan arrays por solicitud")
+    rows = []
+    for index, input_tokens in enumerate(input_counts):
+        error = result["errors"][index] or None
+        output = result["output_lens"][index]
+        ttft = result["ttfts"][index]
+        itls = result["itls"][index]
+        if (
+            type(output) is not int
+            or output < 0
+            or not isinstance(itls, list)
+            or any(
+                not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0
+                for v in [ttft, *itls]
+            )
+        ):
+            raise ValueError("Métricas bench inválidas")
+        decode = sum(itls) if not error else None
+        latency = ttft + decode if decode is not None else None
+        limited = output >= max_tokens
+        rows.append(
+            {
+                "raw_response": result["generated_texts"][index],
+                "error": error,
+                "output_limit_reached": limited,
+                # v0.15.1 does not retain finish_reason in its detailed JSON.
+                "finish_reason": None,
+                "usage": {
+                    "prompt_tokens": input_tokens,
+                    "completion_tokens": output,
+                    "total_tokens": input_tokens + output,
+                },
+                "bench_input_tokens": result["input_lens"][index],
+                "latency_s": latency,
+                "ttft_s": ttft if not error else None,
+                "decode_s": decode,
+                "tpot_s": decode / (output - 1) if decode and output > 1 else None,
+                "decode_tokens_per_second": (output - 1) / decode
+                if decode and output > 1
+                else None,
+                "timing_source": "vllm_bench_serve_stream",
+            }
+        )
+    return rows
+
+
+def stop_process(process):
+    if process is None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=10)
+
+
+class LocalBench:
+    """No model inference API or custom HTTP client: invoke vllm commands."""
+
+    def __init__(self, cfg, run, *, use_adapter=False):
         try:
-            from vllm import LLM, SamplingParams, __version__
-            from vllm.sampling_params import StructuredOutputsParams
+            from transformers import AutoTokenizer
         except ImportError as error:
             raise RuntimeError(
-                "Instala vLLM en el equipo experimental con uv sync --extra infer"
+                "Prepara el equipo experimental con uv sync --extra infer"
             ) from error
+
+        if version("vllm") != VLLM_VERSION:
+            raise ValueError(f"Este protocolo requiere vLLM {VLLM_VERSION}; revisa el lockfile")
         if not Path(cfg.model.path).is_dir():
-            raise ValueError(f"Se requieren pesos locales en {cfg.model.path}")
-        if use_adapter and not cfg.adapter:
-            raise ValueError("Falta la ruta local del adaptador LoRA")
-        self.cfg = cfg
-        self.version = __version__
-        self.sampling_params = SamplingParams
-        self.structured_outputs = StructuredOutputsParams
-        self.lora_request = None
-        self.llm = LLM(
-            model=cfg.model.path,
-            revision=cfg.model.revision,
-            tokenizer_revision=cfg.model.revision,
-            dtype="bfloat16",
-            max_model_len=cfg.max_model_len,
-            gpu_memory_utilization=cfg.gpu_memory_utilization,
-            tensor_parallel_size=1,
-            max_num_seqs=1,
-            seed=cfg.seed,
-            generation_config="vllm",
-            enable_prefix_caching=False,
-            enable_lora=use_adapter,
-            **({"max_lora_rank": 16} if use_adapter else {}),
+            raise ValueError("Se requieren pesos y tokenizador locales")
+        self.cfg, self.run, self.use_adapter = cfg, Path(run), use_adapter
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            cfg.model.path, revision=cfg.model.revision, local_files_only=True
         )
-        self.tokenizer = self.llm.get_tokenizer()
-        if use_adapter:
-            from vllm.lora.request import LoRARequest
+        self.process = None
+        self.log = None
+        self.counter = 0
+        self.port = cfg.port
+        write_json(
+            self.run / "tokenizer.json",
+            {
+                "chat_template": self.tokenizer.chat_template,
+                "chat_template_kwargs": cfg.chat_template_kwargs,
+                "special_tokens_map": self.tokenizer.special_tokens_map,
+            },
+        )
 
-            self.lora_request = LoRARequest("math", 1, cfg.adapter)
+    def render(self, messages):
+        prompt = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, **self.cfg.chat_template_kwargs
+        )
+        ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+        expected = self.tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True, **self.cfg.chat_template_kwargs
+        )
+        if ids != expected:
+            raise ValueError("La plantilla textual no reproduce los tokens previstos")
+        if len(ids) + self.cfg.max_tokens > self.cfg.max_model_len:
+            raise ValueError("Entrada + salida excede el contexto. No se truncará")
+        return {"prompt": prompt, "prompt_token_ids": ids, "input_tokens": len(ids)}
 
-    def close(self):
-        # Each CLI command owns one engine. Its workers exit with this process.
-        self.tokenizer = None
-        self.llm = None
-        gc.collect()
+    def tokenize(self, messages):
+        return self.render(messages)["input_tokens"]
+
+    def preflight(self, messages):
+        return self.tokenize(messages)
 
     def metadata(self):
         return {
-            "execution": "local",
-            "vllm_version": self.version,
-            "model": self.cfg.model.model_dump(),
-            "adapter": self.cfg.adapter if self.lora_request else None,
+            "execution": "local_cli",
+            "vllm_version": VLLM_VERSION,
+            "host": HOST,
+            "port": self.port,
             "dtype": "bfloat16",
-            "tensor_parallel_size": 1,
-            "max_num_seqs": 1,
+            "max_concurrency": 1,
             "enable_prefix_caching": False,
-            "gpu_memory_utilization": self.cfg.gpu_memory_utilization,
+            "initial_readiness_request": True,
+            "num_warmups": 0,
         }
 
-    def token_ids(self, messages):
-        return self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            **self.cfg.chat_template_kwargs,
+    def start(self):
+        # Fail on an occupied port rather than benchmarking an unrelated service.
+        with socket.socket() as sock:
+            sock.bind((HOST, self.port))
+        command = serve_command(self.cfg, self.port, self.use_adapter)
+        append_jsonl(self.run / "commands.jsonl", {"role": "serve", "argv": command})
+        self.log = (self.run / "serve.log").open("x", encoding="utf-8")
+        self.process = subprocess.Popen(
+            command,
+            stdout=self.log,
+            stderr=subprocess.STDOUT,
+            env=offline_environment(),
+            start_new_session=True,
         )
+        deadline = time.monotonic() + self.cfg.ready_timeout_s
+        while time.monotonic() < deadline:
+            if self.process.poll() is not None:
+                raise RuntimeError("vllm serve terminó; revisa serve.log")
+            try:
+                with socket.create_connection((HOST, self.port), timeout=0.2):
+                    return
+            except OSError:
+                time.sleep(0.2)
+        raise RuntimeError("vllm serve no abrió el puerto dentro del plazo; revisa serve.log")
 
-    def tokenize(self, messages):
-        return len(self.token_ids(messages))
-
-    def preflight(self, messages):
-        count = self.tokenize(messages)
-        if count + self.cfg.max_tokens > self.cfg.max_model_len:
-            raise ValueError(
-                f"Entrada {count} + salida {self.cfg.max_tokens} excede {self.cfg.max_model_len}"
-            )
-        return count
-
-    def complete(self, messages, schema, *, seed=None, temperature=None):
-        token_ids = self.token_ids(messages)
-        if len(token_ids) + self.cfg.max_tokens > self.cfg.max_model_len:
-            raise ValueError("La solicitud excede el contexto. No se truncará")
-        params = self.sampling_params(
-            temperature=self.cfg.temperature if temperature is None else temperature,
-            top_p=self.cfg.top_p,
-            max_tokens=self.cfg.max_tokens,
-            seed=self.cfg.seed if seed is None else seed,
-            structured_outputs=self.structured_outputs(json=schema),
+    def batch(self, messages, *, seed=None, temperature=None, schema=None):
+        rendered = [self.render(m) for m in messages]
+        self.counter += 1
+        folder = self.run / f"bench-{self.counter:04d}"
+        folder.mkdir(exist_ok=False)
+        dataset, output = folder / "prompts.jsonl", folder / "result.json"
+        for item in rendered:
+            append_jsonl(dataset, {"prompt": item["prompt"]})
+        write_json(folder / "inputs.json", rendered)
+        command = bench_command(
+            self.cfg,
+            self.port,
+            dataset,
+            output,
+            len(rendered),
+            self.cfg.seed if seed is None else seed,
+            self.cfg.temperature if temperature is None else temperature,
+            schema,
+            self.use_adapter,
         )
-        started = perf_counter()
-        outputs = self.llm.generate(
-            [{"prompt_token_ids": token_ids}],
-            sampling_params=params,
-            lora_request=self.lora_request,
-            use_tqdm=False,
-        )
-        elapsed = perf_counter() - started
-        if len(outputs) != 1 or len(outputs[0].outputs) != 1 or not outputs[0].finished:
-            raise ValueError("vLLM devolvió una salida incompleta o una cantidad inesperada")
-        request = outputs[0]
-        completion = request.outputs[0]
-        output_tokens = len(completion.token_ids)
-        return {
-            "raw_response": completion.text,
-            "finish_reason": completion.finish_reason,
-            "usage": {
-                "prompt_tokens": len(token_ids),
-                "completion_tokens": output_tokens,
-                "total_tokens": len(token_ids) + output_tokens,
-            },
-            "latency_s": elapsed,
-            "output_tokens_per_wall_second": output_tokens / elapsed if elapsed > 0 else None,
-            **request_timings(getattr(request, "metrics", None), output_tokens),
-        }
+        append_jsonl(self.run / "commands.jsonl", {"role": "bench", "argv": command})
+        process = None
+        with (folder / "bench.log").open("x", encoding="utf-8") as log:
+            try:
+                with MemoryMonitor() as memory:
+                    process = subprocess.Popen(
+                        command,
+                        stdout=log,
+                        stderr=subprocess.STDOUT,
+                        env=offline_environment(),
+                        start_new_session=True,
+                    )
+                    code = process.wait()
+                write_json(folder / "memory.json", memory.result())
+            finally:
+                stop_process(process)
+        if code:
+            raise RuntimeError(f"vllm bench serve terminó con código {code}; revisa {folder}")
+        raw = read_json(output)
+        rows = read_detailed(raw, [r["input_tokens"] for r in rendered], self.cfg.max_tokens)
+        for index, row in enumerate(rows):
+            row["bench_result"] = str(output.resolve())
+            row["bench_index"] = index
+        return rows
 
+    def complete(self, messages, schema=None, *, seed=None, temperature=None):
+        return self.batch([messages], seed=seed, temperature=temperature, schema=schema)[0]
 
-def request_timings(metrics, output_tokens):
-    """Only report per-token timings when the engine actually supplies them."""
-    first = getattr(metrics, "first_token_time", None)
-    last = getattr(metrics, "last_token_time", None)
-    arrival = getattr(metrics, "arrival_time", None)
-    ttft = (
-        first - arrival if first is not None and arrival is not None and first >= arrival else None
-    )
-    decode = last - first if last is not None and first is not None and last > first else None
-    return {
-        "ttft_s": ttft,
-        "decode_s": decode,
-        "decode_tokens_per_second": (output_tokens - 1) / decode
-        if decode and output_tokens > 1
-        else None,
-        "timing_source": "vllm_request_metrics" if ttft is not None else "unavailable",
-    }
+    def close(self):
+        stop_process(self.process)
+        if self.log:
+            self.log.close()

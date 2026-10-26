@@ -6,22 +6,33 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from common.contracts import Example, Problem, Request
-from common.data import validate_separation
+from common.contracts import Example, GeneratedProblem, Request
+from common.data import validate_development, validate_requests, validate_separation
 from common.files import append_jsonl, load_rows, new_run, read_json, sha256, write_json
-from common.inference import LocalVLLM
+from common.inference import LocalBench
 from common.monitor import MemoryMonitor
 from common.prompts import conversation
 
 
 def build_requests(cfg, module, shots):
-    requests = load_rows(cfg.benchmark, Request)
-    inputs = [Path(cfg.benchmark)]
+    benchmark = load_rows(cfg.benchmark, Request)
+    development = load_rows(cfg.development, Request)
+    validate_development(development, benchmark)
+    inputs = [Path(cfg.benchmark), Path(cfg.development)]
+    if cfg.phase == "benchmark":
+        validate_requests(benchmark, cfg.oa_registry)
+        inputs.append(Path(cfg.oa_registry))
+        if cfg.repetitions < 2:
+            raise ValueError("Las mediciones finales requieren al menos dos repeticiones")
+        if not cfg.load_conditions.strip():
+            raise ValueError("Registra las condiciones de carga del computador experimental")
+    requests = benchmark if cfg.phase == "benchmark" else development
     context = {}
     if module == "few-shot":
         train = load_rows(cfg.train, Example)
         validation = load_rows(cfg.validation, Example)
-        validate_separation(train, validation, requests)
+        validate_separation(train, validation, benchmark)
+        validate_separation(train, validation, development)
         context = {
             "examples": {(r["id"], r["version"]): r for r in train},
             "assignments": read_json(cfg.demonstrations),
@@ -31,6 +42,16 @@ def build_requests(cfg, module, shots):
     if module == "skill":
         context["instructions"] = Path(cfg.skill).read_text(encoding="utf-8")
         inputs.append(Path(cfg.skill))
+        if cfg.phase == "benchmark":
+            review = read_json(cfg.skill_review)
+            if (
+                review.get("status") != "approved"
+                or review.get("skill_sha256") != sha256(Path(cfg.skill))
+                or not review.get("pedagogical_review")
+                or not review.get("development_runs")
+            ):
+                raise ValueError("Falta revisión pedagógica y pruebas de desarrollo de la skill")
+            inputs.append(Path(cfg.skill_review))
     if module == "lora":
         if not cfg.adapter or not cfg.adapter_sha256:
             raise ValueError("LoRA requiere adapter y adapter_sha256 en la configuración")
@@ -38,7 +59,11 @@ def build_requests(cfg, module, shots):
         if sha256(adapter / "adapter_model.safetensors") != cfg.adapter_sha256:
             raise ValueError("El checksum del adaptador no coincide")
         provenance = read_json(adapter / "provenance.json")
-        if provenance["base_revision"] != cfg.model.revision:
+        if (
+            provenance["base_revision"] != cfg.model.revision
+            or provenance.get("base_id") != cfg.model.id
+            or not cfg.model.id
+        ):
             raise ValueError("El adaptador corresponde a otra revisión del modelo base")
         inputs.extend(
             [
@@ -59,48 +84,53 @@ def build_requests(cfg, module, shots):
 
 
 def infer(cfg, module, shots):
+    from common.performance import summarize_performance
+    from common.runtime import validate_model
+
+    validate_model(cfg, judge=False)
     shots = shots if module == "few-shot" else 0
     built, inputs = build_requests(cfg, module, shots)
     run = new_run(
         cfg.output, module, {**cfg.model_dump(), "module": module, "shots": shots}, inputs
     )
-    engine = LocalVLLM(cfg, use_adapter=module == "lora")
+    engine = LocalBench(cfg, run, use_adapter=module == "lora")
     try:
         write_json(run / "engine.json", engine.metadata())
-        # Check every input before generating any response. Never silently truncate.
         for item in built:
-            item["input_tokens"] = engine.preflight(item["messages"])
+            item.update(engine.render(item["messages"]))
             base_count = engine.tokenize(conversation(item["request"]))
             item["additional_input_tokens"] = item["input_tokens"] - base_count
             append_jsonl(run / "requests.jsonl", item)
-        for repetition in range(cfg.repetitions):
-            for item in built:
-                row = {
-                    **item,
-                    "module": module,
-                    "shots": shots,
-                    "repetition": repetition,
-                    "model": cfg.model.model_dump(),
-                }
-                with MemoryMonitor() as memory:
-                    try:
-                        result = engine.complete(
-                            item["messages"],
-                            Problem.model_json_schema(),
-                            seed=cfg.seed + repetition,
-                        )
-                        row.update(result)
-                        if result["finish_reason"] != "stop":
-                            raise ValueError(f"Salida incompleta: {result['finish_reason']}")
-                        row["problem"] = Problem.model_validate_json(
-                            result["raw_response"]
-                        ).model_dump()
-                        row["error"] = None
-                    except (ValueError, ValidationError) as error:
-                        row["error"] = str(error)
-                row["memory"] = memory.result()
-                append_jsonl(run / "generations.jsonl", row)
+        # Includes the pre-load baseline and startup peak, separate from each bench.
+        with MemoryMonitor() as memory:
+            engine.start()
+            for repetition in range(cfg.repetitions):
+                results = engine.batch(
+                    [item["messages"] for item in built], seed=cfg.seed + repetition
+                )
+                for item, result in zip(built, results, strict=True):
+                    row = {
+                        **item,
+                        **result,
+                        "module": module,
+                        "shots": shots,
+                        "repetition": repetition,
+                        "model": cfg.model.model_dump(),
+                        "phase": cfg.phase,
+                        "problem": None,
+                        "parse_error": None,
+                    }
+                    if not row["error"]:
+                        try:
+                            row["problem"] = GeneratedProblem.model_validate_json(
+                                row["raw_response"]
+                            ).model_dump()
+                        except (ValueError, ValidationError) as error:
+                            row["parse_error"] = str(error)
+                    append_jsonl(run / "generations.jsonl", row)
+        write_json(run / "memory.json", memory.result())
     finally:
         engine.close()
+    summarize_performance(run / "generations.jsonl", run / "performance.json")
     write_json(run / "status.json", {"status": "complete"})
     return run

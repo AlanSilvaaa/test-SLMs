@@ -1,60 +1,42 @@
 # Experimentos con SLM
 
-Comparación de estrategias para generar problemas matemáticos verbales de educación
-básica chilena, según la metodología de la memoria y los proyectos LoRA y
-MathGenBench-CL. La rúbrica y la skill incluidas son provisionales.
+Implementación de la metodología de `main.tex` de la memoria de título: generación
+local de problemas matemáticos para primero a sexto básico con seis SLM y siete
+condiciones por modelo. La rúbrica y la skill incluidas siguen siendo provisionales.
 
-El flujo consiste en clonar este repositorio en el computador experimental,
-preparar allí las dependencias y los pesos, y ejecutar los comandos localmente.
-La inferencia y el judge usan la API Python de vLLM. No hay servicios HTTP,
-URLs de conexión, puertos ni un computador remoto que ejecute los modelos.
-
-## Organización
-
-| Carpeta | Responsabilidad |
-| --- | --- |
-| `base_model/` | Instrucción común, sin adaptación |
-| `few_shot/` | 1 a 4 demostraciones del mismo OA y rotación cíclica |
-| `skill/` | Carga determinista de las instrucciones de `SKILL.md` |
-| `lora/` | Entrenamiento, selección del adaptador e inferencia |
-| `common/` | Contratos, datos, prompts, ejecución local de vLLM y métricas |
-| `judge/` | Evaluación ciega, reportes y formularios de revisión docente |
-| `configs/` | Configuraciones y rúbrica versionada |
-
-El nombre de la carpeta Python es `few_shot`, su flag es `--module few-shot`.
-Solo LoRA requiere entrenamiento.
+Todo se ejecuta en el computador experimental donde se clona este repositorio.
+El programa prepara las entradas, inicia **`vllm serve` en `127.0.0.1`**, ejecuta
+**`vllm bench serve`** y cierra el servidor. Es el procedimiento de medición de la
+memoria. El benchmark oficial utiliza HTTP sobre loopback; no utiliza Internet,
+proveedores externos, clientes HTTP propios ni la API Python `LLM.generate`.
+No ejecutar entrenamiento, generación ni judge en el computador de desarrollo.
 
 ## Preparación del computador experimental
 
-Python 3.12 y `uv`. Desde la raíz del repositorio clonado:
+Python 3.12 y `uv`. Descargar previamente en ese computador los pesos, tokenizadores
+y dependencias. Después, trabajar offline con rutas absolutas locales:
 
 ```bash
-# Inferencia y judge locales
 uv sync --locked --extra infer
-uv run main.py --help
-# Entrenamiento LoRA, en el computador destinado a ello
+# En el equipo de entrenamiento, en un clon separado:
 uv sync --locked --extra train
 ```
 
-Se recomienda usar clones separados para entrenamiento e inferencia si se realizan
-en equipos distintos. `uv sync --locked` sin extras instala solo herramientas
-ligeras y de desarrollo. No instala vLLM ni PyTorch.
+El extra `infer` fija vLLM **0.15.1** y pandas, requerido por su dataset `custom`.
+La compatibilidad con GB10/ARM64 y CUDA debe comprobarse en el hardware experimental.
+Si ese entorno necesita otra distribución, actualizar y validar conjuntamente
+comandos, formato de resultados y lockfile; no asumir compatibilidad por cambiar
+solo la versión. `uv sync --locked` sin extras instala herramientas ligeras.
 
-El extra `infer` fija vLLM mediante el lockfile. Comprobar en el equipo experimental
-su compatibilidad con CUDA y la arquitectura. Para GB10/ARM64 puede requerirse una
-imagen o wheel compatible. Si se ajustan las dependencias para ese entorno,
-hacerlo con `uv` y conservar su lockfile y las versiones efectivas.
-
-Descargar previamente los pesos, el tokenizador y las dependencias en ese mismo
-computador. Completar `model.path` con la ruta absoluta local y `model.revision`
-con el commit exacto del modelo. Antes de las pruebas offline, exportar
-`HF_HUB_OFFLINE=1` y `TRANSFORMERS_OFFLINE=1`. No se activa `trust_remote_code`
-automáticamente ni se almacenan credenciales en el repositorio.
+El ejecutor activa `HF_HUB_OFFLINE=1` y `TRANSFORMERS_OFFLINE=1` en sus procesos y
+el tokenizador se abre con `local_files_only=True`. No activa `trust_remote_code`.
+Registrar `model.id` según `configs/models.json`, `model.path` como carpeta local y
+`model.revision` como commit exacto de 40 caracteres. Se conserva un fingerprint de
+los archivos locales: declarar una revisión no demuestra por sí solo su procedencia.
 
 ## Datos y configuración
 
-Los contratos están descritos en [data/README.md](data/README.md).
-Para reutilizar las solicitudes originales de MathGenBench-CL:
+Ver [data/README.md](data/README.md). Exportar solo una versión aceptada por candidato:
 
 ```bash
 uv run main.py import-benchmark \
@@ -62,51 +44,87 @@ uv run main.py import-benchmark \
 uv run main.py prepare --dataset data/accepted.jsonl --benchmark data/benchmark.jsonl
 ```
 
-`prepare` requiere 40 ejemplos aceptados por cada uno de los 59 OA y cinco
-solicitudes de benchmark por OA. Genera 2006 ejemplos de train y 354 de validación
-(34/6 por OA, semilla 42), más cuatro demostraciones por OA tomadas solo de train.
-Prioriza habilidades distintas. Revisar la selección antes de fijarla y conservar
-los mismos splits para todos los modelos y learning rates. La importación del
-benchmark no sustituye su validación ni importa evaluaciones antiguas.
+`prepare` exige 40 ejemplos por OA y cinco solicitudes por OA, con 59 OA.
+Produce train/validation 34/6 por OA (2006/354 pares), semilla 42, y cuatro
+identificadores de demostraciones por OA tomados solo de train. La revisión
+pedagógica y la detección de paráfrasis siguen siendo necesarias. Se rechazan IDs
+compartidos entre train/validation aunque sus versiones y textos sean distintos.
 
-Copiar `configs/experiment.example.json` a `configs/experiment.json` y completar
-las rutas de pesos y datos. Los archivos de datos se resuelven desde la raíz
-situada sobre `configs/`. Los modelos del informe están en `configs/models.json`.
-Ajustar `chat_template_kwargs` para cada familia antes de fijar el experimento.
+Completar `configs/experiment.json` a partir del ejemplo. Las rutas de datos son
+relativas a la raíz situada sobre `configs/`. Para ejecutar se requieren:
 
-## Inferencia local
+- `benchmark`: las solicitudes finales reservadas.
+- `development`: otras solicitudes para ajuste y pruebas, sin IDs ni solicitudes
+  literales del benchmark. Desarrollo tampoco puede solaparse con los ejemplos.
+- `oa_registry`: el registro local revisado de los 59 OA, con curso, eje y texto
+  exacto. El benchmark se contrasta con su identidad y con la distribución de la
+  tabla de la memoria, además de exigir 295 solicitudes.
+- `phase`: `development` utiliza las solicitudes de desarrollo; `benchmark` exige
+  el conjunto completo y al menos dos repeticiones. El ejemplo usa tres repeticiones:
+  es una decisión operativa explícita, no un número fijado en la memoria.
+- `load_conditions`: descripción de carga del equipo para las mediciones finales.
+  `container_image`: identidad y digest del contenedor, obligatoria al entrenar.
+
+Temperatura 0.6, top_p 0.95, salida máxima 1024 y memoria reservable 0.85 son valores
+iniciales del proyecto. La memoria no fija esos números: deben ajustarse en
+**desarrollo**, documentarse y mantenerse comunes antes del benchmark. Contar las
+entradas de las siete condiciones con los seis tokenizadores antes de fijar el
+contexto común; el límite inicial es 4096, incluyendo reserva de salida. El
+preflight rechaza excesos y verifica que texto y tokens de la plantilla coincidan.
+
+## Generación y medición local
 
 ```bash
 uv run --extra infer main.py run --module base_model --action infer --config configs/experiment.json
 uv run --extra infer main.py run --module few-shot --action infer --shots 1 --config configs/experiment.json
+uv run --extra infer main.py run --module few-shot --action infer --shots 2 --config configs/experiment.json
+uv run --extra infer main.py run --module few-shot --action infer --shots 3 --config configs/experiment.json
 uv run --extra infer main.py run --module few-shot --action infer --shots 4 --config configs/experiment.json
 uv run --extra infer main.py run --module skill --action infer --config configs/experiment.json
 uv run --extra infer main.py run --module lora --action infer --config configs/lora-infer.json
 ```
 
-Repetir few-shot con `--shots 2` y `3`. Los ejemplos A, B, C, D rotan cíclicamente
-según la posición de la solicitud dentro de su OA, manteniendo la asignación entre
-modelos. vLLM se carga una vez por comando y procesa las solicitudes secuencialmente.
-El límite inicial de 4096 tokens incluye entrada y salida reservada. Todas las
-entradas se comprueban antes de generar y no se truncan.
+El mismo comando prepara prompts con la plantilla del modelo, inicia el servidor
+local y ejecuta una invocación de `vllm bench serve` por repetición. Se utiliza
+`--dataset-name custom`, `--skip-chat-template`, `--disable-shuffle`,
+`--no-oversample`, `--max-concurrency 1`, `--save-result` y `--save-detailed`.
+La plantilla ya aplicada no se aplica nuevamente. Se respetan EOS y los valores
+explícitos de decodificación. Los ejemplos A/B/C/D rotan según la posición de la
+solicitud dentro del OA, con la misma asignación entre modelos.
 
-Para inferencia LoRA, configurar `adapter` y `adapter_sha256` con el adaptador
-seleccionado. Se carga directamente con `LoRARequest`, sin fusionarlo con el modelo
-base. Su revisión debe coincidir con `provenance.json`. La ruta de los pesos puede
-ser distinta entre el computador de entrenamiento y el de inferencia.
-La condición LoRA utiliza únicamente la instrucción común.
+Cada carpeta nueva en `output/` conserva configuración, código, versiones,
+checksums, plantilla efectiva, prompts y tokens, comandos exactos, logs de serve y
+bench, resultados nativos, generaciones y resúmenes. No se sobrescriben ejecuciones.
+Una interrupción conserva logs y repeticiones finalizadas; vLLM guarda el resultado
+nativo al terminar cada invocación, por lo que no se garantiza recuperar la
+repetición que estaba en curso. `status.json` aparece solo al completar el flujo.
 
-Cada ejecución crea una carpeta en `output/` con configuración, versiones,
-checksums, solicitudes, respuestas originales, errores y métricas. Se guarda cada
-respuesta al terminar su solicitud. Una ejecución interrumpida conserva lo escrito
-y no tiene `status.json` de finalización. `repetitions` repite el conjunto con
-semillas `seed + repetición`. `gpu_memory_utilization` controla la fracción de
-memoria que vLLM puede reservar, con valor inicial 0.85.
+La salida del generador se solicita como JSON mediante el prompt común, sin
+forzar una gramática. Se preservan errores de parseo aparte de las valoraciones.
+Si el JSON contiene un enunciado y una solución vacía/ausente, el enunciado puede
+evaluarse y la ausencia de solución se registra separadamente. Si se alcanza el
+límite de salida se registra explícitamente `output_limit_reached`; vLLM 0.15.1 no
+conserva `finish_reason` en el resultado detallado. Revisar estos casos antes de
+cerrar el experimento. No se inventan motivos de terminación.
+
+Para LoRA, configurar `adapter` y `adapter_sha256` del adaptador seleccionado.
+Se registra como módulo local `math`, utilizado también en la solicitud inicial
+del benchmark; no se sortean adaptadores. Se verifica su checksum, identificador
+y revisión del modelo base. Puede cambiar la ruta de pesos entre computadores.
+La condición LoRA utiliza solo la instrucción común.
+
+La skill debe pasar revisión pedagógica y pruebas de desarrollo con los modelos.
+En benchmark, `skill_review` debe señalar un registro local con `status: "approved"`,
+`skill_sha256` del archivo revisado, `pedagogical_review` y `development_runs`.
+Es evidencia que debe completar el investigador; no se incluye una aprobación ficticia.
+
+Ver definiciones, alcance de calentamiento y limitaciones en
+[docs/performance.md](docs/performance.md).
 
 ## Entrenamiento y selección LoRA
 
-Crear tres configuraciones por modelo, cambiando únicamente `learning_rate`:
-`0.00005`, `0.0001` y `0.0002`. Ejecutar solo en el equipo de entrenamiento:
+Solo en el equipo de entrenamiento. Crear tres configuraciones por modelo,
+cambiando únicamente `learning_rate`: 0.00005, 0.0001 y 0.0002.
 
 ```bash
 uv run --extra train main.py run --module lora --action train --config configs/lora-lr1.json
@@ -115,46 +133,85 @@ uv run --extra train main.py run --module lora --action train --config configs/l
 uv run main.py select-lora output/RUN1 output/RUN2 output/RUN3 --output selected-adapter.json
 ```
 
-Son 18 entrenamientos para los seis modelos. Cada orden inicia un adaptador nuevo.
-Se fija rango 16, alpha 32, dropout 0.05, cinco épocas, BF16, microbatch 1,
-acumulación 16, AdamW, cosine, warmup 10 % y gradient checkpointing. Sin packing
-ni cuantización del modelo base. La pérdida excluye tokens de la solicitud y
-padding. Se verifican las máscaras y se rechazan secuencias demasiado largas.
-`all-linear` de PEFT adapta proyecciones lineales y excluye la capa de salida.
-Revisar la lista registrada de parámetros adaptados para cada arquitectura.
+Son 18 entrenamientos independientes. Rango 16, alpha 32, dropout 0.05, cinco épocas,
+BF16, microbatch 1, acumulación 16, AdamW no fused (0.9/0.999/1e-8), cosine hasta
+cero, warmup 10 %, weight decay 0, clipping 1 y gradient checkpointing. Sin packing,
+cuantización ni early stopping. Se conserva el último grupo incompleto. Pérdida
+solo sobre respuesta del asistente, excluyendo solicitud y padding.
 
-Se conserva el checkpoint con menor pérdida de validación. Entre las tres tasas
-se selecciona menor pérdida, luego época más temprana y luego menor tasa. No se
-comparan pérdidas de modelos diferentes ni se reentrena con validación.
+Se requiere semilla 42 y `all-linear`; se guardan los nombres de parámetros
+adaptados. Verificar en el equipo de entrenamiento que la política cubra atención
+y MLP, excluyendo biases, embeddings y salida en cada arquitectura. El código usa
+Transformers Trainer con máscaras explícitas; **TRL no se utiliza**. Se registran
+las advertencias Python del entrenamiento y las versiones del entorno.
 
-## Judge reutilizable
+Seleccionar por menor pérdida de validación; desempatar por época más temprana y
+learning rate menor. No comparar pérdidas entre tokenizadores diferentes ni
+reentrenar con validación. La prueba de memoria/compatibilidad con el modelo mayor
+y secuencias más largas debe realizarse antes de los 18 entrenamientos en Patagón.
 
-Tras confirmar la rúbrica, copiar `configs/rubric.draft.json` a una versión nueva,
-revisar descriptores y ejemplos, asignar versión y marcar `status: "approved"`.
-El código rechaza rúbricas draft. Calibrar con problemas de desarrollo y revisión
-manual antes del benchmark. Completar `configs/judge.json` desde el ejemplo para
-cargar Gemma 3 27B IT localmente, después de medir los generadores.
+## Judge y revisión docente
+
+La rúbrica original se conserva. `configs/rubric.v0.2-draft.json` incorpora
+explícitamente la regla de la memoria sobre errores lingüísticos menores. Sigue
+siendo **draft**: revisar, calibrar y versionar antes de aprobarla. El ejecutor
+rechaza rúbricas draft y exige exactamente las cinco dimensiones previstas.
+
+Completar `configs/judge.json` con Gemma 3 27B IT. El juez usa los mismos comandos
+oficiales locales, después de medir los generadores. En `phase: "development"`
+permite calibrar con generaciones de desarrollo y una rúbrica aprobada para esa
+revisión. Para el benchmark requiere `judge_review`: `status: "approved"`,
+`rubric_sha256`, `manual_review` y `development_sources` (rutas absolutas a archivos
+de generaciones de desarrollo), separados de las solicitudes finales. La fase de
+las generaciones debe coincidir con la del juez.
 
 ```bash
 uv run --extra infer main.py judge --config configs/judge.json \
   --source output/RUN/generations.jsonl --rubric configs/rubric.v1.json
 uv run main.py summarize --source output/JUDGE/evaluations.jsonl --output summary.json
-uv run main.py export-human --source output/RUN/generations.jsonl --output output/revision-docente
 ```
 
-Primero se puntúa únicamente el enunciado, sin solución ni identidad del generador.
-El ajuste adicional a la solicitud se registra aparte. Si el enunciado es resoluble,
-se obtiene una solución independiente antes de mostrar la propuesta y luego se
-contrasta esta última. Se conservan instrucciones y respuestas de todas las etapas.
-El cumplimiento conjunto incluye solo las cinco dimensiones del enunciado.
+Dos etapas: (1) enunciado, curso/OA y rúbrica, sin solución ni identidad del
+modelo; (2) solo si es resoluble, comprobar la solución y registrar procedimiento
+independiente y corrección. La segunda etapa ve la propuesta, como indica la memoria;
+no equivale a una resolución ciega previa. En el dataset, la resolución independiente
+antes de consultar la propuesta sigue siendo responsabilidad del investigador.
+Los puntajes de solución y ajuste a la solicitud quedan fuera del conjunto de cinco.
+Los errores técnicos se conservan como ausentes y no se convierten en puntajes 0.
 
-Los reportes mantienen todas las generaciones en el denominador y muestran los
-juicios ausentes por separado. La corrección se informa entre casos resolubles.
-Los formularios humanos separan enunciado, solución y mapa privado. Corresponde al
-investigador seleccionar la muestra estratificada prevista en el informe y
-conservar revisiones y discrepancias sin sobrescribir las puntuaciones originales.
+```bash
+# Muestra del dataset: 118 problemas, dos por OA
+uv run main.py sample-dataset --train data/train.jsonl --validation data/validation.jsonl \
+  --demonstrations data/demonstrations.json --output output/revision-dataset
+# Muestra final: suministrar las ejecuciones de modelos y estrategias a comparar
+uv run main.py export-human --source output/RUN1/generations.jsonl \
+  --source output/RUN2/generations.jsonl --output output/revision-docente
+```
 
-## Verificación y mediciones
+La muestra final usa semilla 42, mínimo 30 problemas por modelo y cubre OA, cursos
+y estrategias presentes en las fuentes; puede superar 30 para dar esa cobertura.
+Se baraja antes de exportar formularios separados de enunciado y solución. El mapa
+de identidad y los archivos privados no deben entregarse al docente. `--all`
+exporta todas las filas sin muestreo. Proporcionar todas las condiciones necesarias:
+no se inventa cobertura de ejecuciones que no se entregaron.
+
+Para comparar anotaciones independientes:
+
+```bash
+uv run main.py agreement --judge output/JUDGE1/evaluations.jsonl \
+  --judge output/JUDGE2/evaluations.jsonl --human data/human.jsonl \
+  --mapping output/revision-docente/private_mapping.csv --output output/acuerdo.json
+```
+
+Formato de la anotación humana JSONL: `blind_id`, `evaluador`, `rubric_version`,
+`statement` con los cinco IDs y objetos `{score, reason}`, y `solution` con
+`{score, reason}` o null si no se evaluó. Justificar solo 0. Se verifica la misma
+versión de rúbrica, se calcula acuerdo por dimensión y conjunto, y acuerdo de
+solución solo entre resolubles por ambos evaluadores. Se exportan discrepancias
+por modelo/estrategia, sin modificar puntuaciones originales. Su resolución
+fundamentada debe conservarse en un registro nuevo por el investigador.
+
+## Verificación
 
 ```bash
 uv run ruff check .
@@ -162,15 +219,7 @@ uv run ruff format --check .
 uv run pytest
 ```
 
-Las pruebas usan datos y módulos simulados. No cargan modelos ni ejecutan
-entrenamiento o evaluación real. La compatibilidad GPU y las plantillas reales
-deben comprobarse en el equipo experimental.
-
-La inferencia registra tokens, tiempo de la llamada local, RAM y swap. TTFT y
-velocidad de decode solo se registran si vLLM proporciona sus tiempos por solicitud.
-Ver las definiciones y el ajuste respecto de la medición con `bench serve` del
-informe en [docs/performance.md](docs/performance.md).
-
-Referencias: [vLLM Python API](https://docs.vllm.ai/en/stable/api/vllm/),
-[LoRA en vLLM](https://docs.vllm.ai/en/stable/features/lora/),
-[PEFT LoRA](https://huggingface.co/docs/peft/en/developer_guides/lora).
+Las pruebas usan datos sintéticos y procesos simulados, sin pesos, modelos ni GPU.
+La aceptación pedagógica, revisiones docentes y compatibilidad del hardware se
+comprueban fuera de estas pruebas. El informe histórico de auditoría se conserva
+en `docs/`; las correcciones posteriores se documentan por separado.
