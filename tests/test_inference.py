@@ -142,3 +142,18 @@ def test_failed_bench_never_returns_fabricated_metrics(tmp_path, monkeypatch):
     assert len(cleaned) == 1
     assert (tmp_path / "bench-0001/bench.log").exists()
     assert not (tmp_path / "bench-0001/result.json").exists()
+
+
+def test_server_failure_keeps_compiler_root_cause_outside_last_100_lines(tmp_path):
+    from common.inference import server_failure
+
+    log = tmp_path / "serve.log"
+    log.write_text(
+        "/tmp/cuda_utils.c:4: fatal error: Python.h: No such file or directory\n"
+        + "traceback frame\n" * 200
+        + "RuntimeError: Engine core initialization failed\n"
+    )
+    message = server_failure(log, 1)
+    assert "fatal error: Python.h" in message
+    assert str(log) in message
+    assert "código 1" in message

@@ -7,6 +7,7 @@ import signal
 import socket
 import subprocess
 import time
+from collections import deque
 from importlib.metadata import version
 from pathlib import Path
 
@@ -218,6 +219,37 @@ def stop_process(process):
         process.wait(timeout=10)
 
 
+def server_failure(log_path, exit_code):
+    """Retain early compiler diagnostics that disappear from a traceback tail."""
+    diagnostics, tail = [], deque(maxlen=8)
+    needles = (
+        "fatal error:",
+        "cannot find -l",
+        "undefined reference",
+        "collect2:",
+        "importerror:",
+        "modulenotfounderror:",
+        "error while loading shared libraries",
+        "permission denied",
+        "runtimeerror:",
+    )
+    try:
+        with Path(log_path).open(encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                tail.append(line[:1200])
+                if len(diagnostics) < 8 and any(n in line.lower() for n in needles):
+                    diagnostics.append(line[:1200])
+    except OSError:
+        pass
+    excerpt = "\n".join(diagnostics or tail)
+    return f"vllm serve terminó con código {exit_code}. Log: {log_path}" + (
+        f"\n{excerpt}" if excerpt else ""
+    )
+
+
 class LocalBench:
     """No model inference API or custom HTTP client: invoke vllm commands."""
 
@@ -303,7 +335,7 @@ class LocalBench:
         deadline = time.monotonic() + self.cfg.ready_timeout_s
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
-                raise RuntimeError("vllm serve terminó; revisa serve.log")
+                raise RuntimeError(server_failure(self.run / "serve.log", self.process.returncode))
             try:
                 with socket.create_connection((HOST, self.port), timeout=0.2):
                     return
