@@ -5,7 +5,7 @@ import pytest
 from typer.testing import CliRunner
 
 from common.contracts import Model
-from common.models import check_snapshot, model_id, prepare_model
+from common.models import DEFAULT_MODELS_DIR, check_snapshot, model_id, prepare_model
 from common.quick import run_quick
 from main import app
 
@@ -33,7 +33,7 @@ def test_quick_cli_accepts_requested_syntax_without_config(monkeypatch, flag):
     result = CliRunner().invoke(app, ["-n", "5", flag, "SmolLM3"])
     assert result.exit_code == 0, result.output
     assert len(calls) == 1
-    assert calls[0][0:3] == (5, "SmolLM3", Path("/models"))
+    assert calls[0][0:3] == (5, "SmolLM3", DEFAULT_MODELS_DIR)
     assert "saved" in result.output
 
 
@@ -124,3 +124,12 @@ def test_quick_options_not_silently_ignored_with_subcommands():
     result = CliRunner().invoke(app, ["-n", "2", "summarize", "--source", "missing"])
     assert result.exit_code != 0
     assert "sin subcomando" in result.output
+
+
+def test_default_model_cache_is_inside_repository_even_from_another_directory(
+    tmp_path, monkeypatch
+):
+    root = Path(__file__).resolve().parent.parent
+    monkeypatch.chdir(tmp_path)
+    assert DEFAULT_MODELS_DIR == root / "models"
+    assert DEFAULT_MODELS_DIR != Path("/models")

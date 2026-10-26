@@ -6,7 +6,7 @@ from pathlib import Path
 from common.contracts import Model
 from common.files import read_json
 
-DEFAULT_MODELS_DIR = Path("/models")
+DEFAULT_MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 # Friendly names are deliberately unambiguous; full catalog IDs also work.
 ALIASES = {
     "smollm3": "HuggingFaceTB/SmolLM3-3B",

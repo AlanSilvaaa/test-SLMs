@@ -8,6 +8,7 @@ def load_config(path: Path) -> Experiment:
     """Resolve all data paths relative to the config file's project root."""
     cfg = Experiment.model_validate(read_json(path))
     root = path.resolve().parent.parent
+    cfg.model.path = str((root / cfg.model.path).resolve())
     for name in (
         "benchmark",
         "development",

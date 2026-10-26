@@ -29,7 +29,7 @@ problemas matemáticos para educación básica chilena con SLM offline.
 - Documentar cambios metodológicos frente al informe. No inventar mediciones ni
   afirmar compatibilidad GPU sin probarla en el equipo correspondiente.
 - No guardar tokens, cachés de modelos, datasets privados ni resultados en Git.
-- Usar `/models` como caché por defecto de pesos por modelID. El modo rápido puede
+- Usar `models/` como caché por defecto de pesos por modelID. El modo rápido puede
   descargar snapshots faltantes en el equipo experimental antes de iniciar la
   generación local offline; `--offline` debe impedir descargas.
 - La fuente de la verdad será lo que diga el `main.tex` de la memoria de titulo, ubicado en `/home/alan/Documents/memoria-de-titulo/main.tex`

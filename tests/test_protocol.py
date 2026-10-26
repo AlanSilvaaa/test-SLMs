@@ -54,6 +54,7 @@ def test_no_training_for_prompt_strategies(tmp_path):
     # The action guard is tested with a real lightweight configuration.
     cfg = tmp_path / "configs" / "x.json"
     cfg.parent.mkdir()
+    (tmp_path / "model-id").mkdir()
     cfg.write_text(
         json.dumps(
             {
@@ -416,3 +417,23 @@ def test_smoke_still_checks_separation_if_reserved_benchmark_exists(tmp_path):
     )
     with pytest.raises(ValueError, match="separados"):
         build_requests(cfg, "base_model", 0)
+
+
+def test_relative_model_path_is_resolved_from_config_project_root(tmp_path, monkeypatch):
+    from common.config import load_config
+    from common.files import write_json
+
+    root = tmp_path / "repo"
+    (root / "configs").mkdir(parents=True)
+    model = root / "models" / "snapshot"
+    model.mkdir(parents=True)
+    config = root / "configs" / "experiment.json"
+    write_json(
+        config,
+        {
+            "model": {"path": "models/snapshot", "revision": "abc"},
+            "benchmark": "data/benchmark.jsonl",
+        },
+    )
+    monkeypatch.chdir(tmp_path)
+    assert load_config(config).model.path == str(model)

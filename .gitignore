@@ -14,6 +14,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 output/
+/models/
 data/*
 !data/README.md
 .env

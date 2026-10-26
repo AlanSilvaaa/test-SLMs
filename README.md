@@ -39,15 +39,16 @@ También se aceptan `-model SmolLM3`, `-m SmolLM3` y el ID completo
 base en modo desarrollo, una repetición, con las cinco solicitudes sintéticas
 incluidas. Los resultados se guardan en `output/smoke/<ejecución>/`.
 
-Los pesos se buscan primero en **`/models`**, usando la estructura de caché de
+Los pesos se buscan primero en **`models/` dentro de la raíz del repositorio**,
+independientemente del directorio desde el que se invoque el programa, usando la estructura de caché de
 Hugging Face por modelID, por ejemplo:
 
 ```text
-/models/models--HuggingFaceTB--SmolLM3-3B/snapshots/<commit>/
+models/models--HuggingFaceTB--SmolLM3-3B/snapshots/<commit>/
 ```
 
 Si no hay un snapshot completo, se descarga allí antes de iniciar serve/bench.
-La primera preparación requiere conexión y permisos de escritura en `/models`.
+La primera preparación requiere conexión y permisos de escritura en `models/`.
 Después se utiliza la ruta local y se registra el commit exacto resuelto. Si ya
 hay una copia completa, se reutiliza sin consultar la red. Para impedir descargas:
 

@@ -14,8 +14,8 @@ Si necesitas un token, copiar `.env.example` a `.env` en la raíz y completar
 uv run --extra infer main.py -n 5 --model SmolLM3
 ```
 
-Busca el modelo en `/models` y lo descarga allí si falta. La estructura conserva
-el modelID y el commit: `/models/models--HuggingFaceTB--SmolLM3-3B/snapshots/<commit>/`.
+Busca el modelo en `models/` y lo descarga allí si falta. La estructura conserva
+el modelID y el commit: `models/models--HuggingFaceTB--SmolLM3-3B/snapshots/<commit>/`.
 Usar `--offline` para prohibir descargas o `--models-dir` para cambiar la carpeta.
 No se necesita copiar ni editar configuración. Se usa una repetición y la condición
 base, con las cinco solicitudes de este directorio. Para N mayor que cinco,

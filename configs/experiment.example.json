@@ -1,6 +1,6 @@
 {
   "model": {
-    "path": "/models/models--HuggingFaceTB--SmolLM3-3B/snapshots/REEMPLAZAR_POR_COMMIT_DEL_MODELO",
+    "path": "models/models--HuggingFaceTB--SmolLM3-3B/snapshots/REEMPLAZAR_POR_COMMIT_DEL_MODELO",
     "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO",
     "id": "HuggingFaceTB/SmolLM3-3B"
   },

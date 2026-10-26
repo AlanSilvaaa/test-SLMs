@@ -1,6 +1,6 @@
 {
   "model": {
-    "path": "/models/models--google--gemma-3-27b-it/snapshots/REEMPLAZAR_POR_COMMIT_DEL_MODELO",
+    "path": "models/models--google--gemma-3-27b-it/snapshots/REEMPLAZAR_POR_COMMIT_DEL_MODELO",
     "revision": "REEMPLAZAR_POR_COMMIT_DEL_MODELO",
     "id": "google/gemma-3-27b-it"
   },

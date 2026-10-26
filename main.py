@@ -8,6 +8,7 @@ import typer
 
 from common.config import load_config
 from common.environment import load_repo_env
+from common.models import DEFAULT_MODELS_DIR
 
 app = typer.Typer(
     no_args_is_help=True, help="Experimentos SLM para generación de problemas matemáticos"
@@ -28,7 +29,7 @@ def quick(
     ] = "SmolLM3",
     models_dir: Annotated[
         Path, typer.Option("--models-dir", help="Caché local de pesos por modelID")
-    ] = Path("/models"),
+    ] = DEFAULT_MODELS_DIR,
     revision: Annotated[
         str | None, typer.Option("--revision", help="Commit exacto opcional")
     ] = None,
