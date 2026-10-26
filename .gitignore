@@ -17,5 +17,7 @@ output/
 data/*
 !data/README.md
 .env
+.env.*
+!.env.example
 *.safetensors
 checkpoints/

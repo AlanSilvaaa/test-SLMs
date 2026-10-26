@@ -13,6 +13,21 @@ No ejecutar entrenamiento, generación ni judge en el computador de desarrollo.
 
 ## Prueba rápida con flags
 
+Si necesitas autenticar las descargas de Hugging Face, copiar `.env.example` a
+`.env` en la raíz del clon y completar `HF_TOKEN`:
+
+```dotenv
+HF_TOKEN=hf_TU_TOKEN
+```
+
+El programa carga ese archivo automáticamente antes de preparar el modelo.
+Las variables que ya existen en el entorno tienen prioridad. No se realiza un
+`login()` persistente: el SDK utiliza
+[`HF_TOKEN`](https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables#hf_token)
+durante la descarga. `.env` está excluido de Git y el token no se incluye en la
+configuración, los comandos ni los resultados. Los procesos locales de
+serve/bench tampoco reciben `HF_TOKEN`.
+
 En el computador experimental, desde la raíz del repositorio:
 
 ```bash

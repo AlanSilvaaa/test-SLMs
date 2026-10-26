@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 
 from common.config import load_config
+from common.environment import load_repo_env
 
 app = typer.Typer(
     no_args_is_help=True, help="Experimentos SLM para generación de problemas matemáticos"
@@ -45,6 +46,7 @@ def quick(
     ] = Path("output/smoke"),
 ):
     """Prueba rápida base: uv run main.py -n 5 --model SmolLM3."""
+    load_repo_env()
     if ctx.invoked_subcommand is not None:
         names = ("count", "model", "models_dir", "revision", "offline", "requests", "output")
         if any(ctx.get_parameter_source(name).name == "COMMANDLINE" for name in names):

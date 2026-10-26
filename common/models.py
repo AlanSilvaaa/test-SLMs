@@ -27,6 +27,9 @@ def model_id(name):
 
 
 def _snapshot_download(**kwargs):
+    from common.environment import load_repo_env
+
+    load_repo_env()
     try:
         from huggingface_hub import snapshot_download
     except ImportError as error:

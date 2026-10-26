@@ -38,6 +38,8 @@ def offline_environment():
         env.pop(name, None)
     # The official benchmark reads this variable even for a local server.
     env.pop("OPENAI_API_KEY", None)
+    env.pop("HF_TOKEN", None)
+    env.pop("HUGGING_FACE_HUB_TOKEN", None)
     return env
 
 

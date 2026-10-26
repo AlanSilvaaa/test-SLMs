@@ -7,6 +7,9 @@ salida JSON, mediciones y guardado sin preparar LoRA, few-shot, skill o judge.
 
 La forma más sencilla, en el computador experimental y desde la raíz del clon:
 
+Si necesitas un token, copiar `.env.example` a `.env` en la raíz y completar
+`HF_TOKEN=hf_TU_TOKEN`. Se carga automáticamente y no hace falta ejecutar un login.
+
 ```bash
 uv run --extra infer main.py -n 5 --model SmolLM3
 ```
