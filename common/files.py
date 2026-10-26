@@ -3,12 +3,13 @@
 import hashlib
 import json
 import platform
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 
 def read_json(path):
@@ -53,18 +54,37 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def new_run(root, label, config, inputs):
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run = Path(root) / f"{stamp}-{label}-{uuid4().hex[:8]}"
-    run.mkdir(parents=True, exist_ok=False)
+def new_run(root, label, config, inputs, *, details=False):
+    now = datetime.now(timezone.utc)
+    local = now.astimezone(ZoneInfo("America/Santiago"))
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    model = config.get("model") or {}
+    namespace = model.get("id") or Path(model.get("path", label)).name
+    parts = namespace.split("/")
+    if any(p in ("", ".", "..") or not re.fullmatch(r"[\w.-]+", p) for p in parts):
+        raise ValueError("modelID inválido para la carpeta de resultados")
+    parent = Path(root).joinpath(*parts)
+    parent.mkdir(parents=True, exist_ok=True)
+    readable = local.strftime("%Y-%m-%d_%H-%M-%S")
+    for number in range(1, 1001):
+        run = parent / (readable if number == 1 else f"{readable}-{number:02d}")
+        try:
+            run.mkdir(exist_ok=False)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise RuntimeError("No se pudo reservar una carpeta nueva para la ejecución")
+    artifacts = run / "detalles" if details else run
+    artifacts.mkdir(exist_ok=True)
     packages = {}
-    for name in ("vllm", "torch", "transformers", "peft", "trl", "pydantic", "pandas"):
+    for name in ("vllm", "torch", "transformers", "peft", "trl", "pydantic", "pandas", "openpyxl"):
         try:
             packages[name] = version(name)
         except PackageNotFoundError:
             pass
     model = config.get("model")
-    if isinstance(model, dict) and Path(model.get("path", "")).is_dir():
+    if isinstance(model, dict) and model.get("path") and Path(model["path"]).is_dir():
         # Preserve a fingerprint of the actual local files, including the weights.
         inputs = list(inputs) + [
             p
@@ -77,13 +97,16 @@ def new_run(root, label, config, inputs):
         sources.extend((root / directory).glob("*.py"))
     for source in sorted(sources):
         if source.is_file():
-            target = run / "source" / source.relative_to(root)
+            target = artifacts / "source" / source.relative_to(root)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
     write_json(
-        run / "manifest.json",
+        artifacts / "manifest.json",
         {
             "created_utc": stamp,
+            "created_local": local.isoformat(),
+            "timezone": "America/Santiago",
+            "kind": label,
             "config": config,
             "trl": "not_used; Transformers Trainer with explicit response masks",
             "python": sys.version,
@@ -97,5 +120,5 @@ def new_run(root, label, config, inputs):
     )
     from common.runtime import hardware_metadata
 
-    write_json(run / "hardware-host.json", hardware_metadata())
+    write_json(artifacts / "hardware-host.json", hardware_metadata())
     return run

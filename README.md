@@ -37,7 +37,30 @@ uv run --extra infer main.py -n 5 --model SmolLM3
 También se aceptan `-model SmolLM3`, `-m SmolLM3` y el ID completo
 `HuggingFaceTB/SmolLM3-3B`. No hace falta editar JSON. Se ejecuta solo la condición
 base en modo desarrollo, una repetición, con las cinco solicitudes sintéticas
-incluidas. Los resultados se guardan en `output/smoke/<ejecución>/`.
+incluidas. Al finalizar se imprime la ruta de `resultados.xlsx`, dentro de
+`output/HuggingFaceTB/SmolLM3-3B/<fecha-hora>/`.
+
+Los seis modelos admiten estos alias en `--model`, `-model` o `-m`.
+Los alias no distinguen mayúsculas de minúsculas; también se acepta el modelID completo.
+
+| Alias | ModelID |
+| --- | --- |
+| `SmolLM3` | `HuggingFaceTB/SmolLM3-3B` |
+| `llama-1b` | `meta-llama/Llama-3.2-1B-Instruct` |
+| `granite-2b` | `ibm-granite/granite-3.3-2b-instruct` |
+| `phi4-mini` | `microsoft/Phi-4-mini-instruct` |
+| `qwen3-4b` | `Qwen/Qwen3-4B-Instruct-2507` |
+| `granite-8b` | `ibm-granite/granite-3.3-8b-instruct` |
+
+Por ejemplo, para probar cinco solicitudes con Qwen3 en el equipo experimental:
+
+```bash
+uv run --extra infer main.py -n 5 --model qwen3-4b
+```
+
+Cada comando ejecuta un único modelo en condición base. Los alias se definen en
+[`common/models.py`](common/models.py) y se validan contra
+[`configs/models.json`](configs/models.json).
 
 Los pesos se buscan primero en **`models/` dentro de la raíz del repositorio**,
 independientemente del directorio desde el que se invoque el programa, usando la estructura de caché de
@@ -174,7 +197,13 @@ La plantilla ya aplicada no se aplica nuevamente. Se respetan EOS y los valores
 explícitos de decodificación. Los ejemplos A/B/C/D rotan según la posición de la
 solicitud dentro del OA, con la misma asignación entre modelos.
 
-Cada carpeta nueva en `output/` conserva configuración, código, versiones,
+Las generaciones se guardan en `output/<modelID>/<fecha-hora>/`: abrir
+**`resultados.xlsx`** para revisar enunciados, soluciones, errores y métricas.
+La fecha usa la hora de Chile (`America/Santiago`). Los archivos técnicos quedan
+en `detalles/`. Ver [la guía de resultados](docs/results.md), incluida la conversión
+a Excel de ejecuciones anteriores.
+
+Cada ejecución conserva configuración, código, versiones,
 checksums, plantilla efectiva, prompts y tokens, comandos exactos, logs de serve y
 bench, resultados nativos, generaciones y resúmenes. No se sobrescriben ejecuciones.
 Una interrupción conserva logs y repeticiones finalizadas; vLLM guarda el resultado
@@ -249,7 +278,7 @@ las generaciones debe coincidir con la del juez.
 
 ```bash
 uv run --extra infer main.py judge --config configs/judge.json \
-  --source output/RUN/generations.jsonl --rubric configs/rubric.v1.json
+  --source output/MODEL/FECHA/detalles/generations.jsonl --rubric configs/rubric.v1.json
 uv run main.py summarize --source output/JUDGE/evaluations.jsonl --output summary.json
 ```
 
@@ -266,8 +295,8 @@ Los errores técnicos se conservan como ausentes y no se convierten en puntajes 
 uv run main.py sample-dataset --train data/train.jsonl --validation data/validation.jsonl \
   --demonstrations data/demonstrations.json --output output/revision-dataset
 # Muestra final: suministrar las ejecuciones de modelos y estrategias a comparar
-uv run main.py export-human --source output/RUN1/generations.jsonl \
-  --source output/RUN2/generations.jsonl --output output/revision-docente
+uv run main.py export-human --source output/MODEL/FECHA1/detalles/generations.jsonl \
+  --source output/MODEL/FECHA2/detalles/generations.jsonl --output output/revision-docente
 ```
 
 La muestra final usa semilla 42, mínimo 30 problemas por modelo y cubre OA, cursos

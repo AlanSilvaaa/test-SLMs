@@ -16,6 +16,11 @@ el servidor; se verifica su equivalencia con el tokenizador local.
 
 ## Métricas
 
+Cada generación completada crea `resultados.xlsx` en
+`output/<modelID>/<fecha-hora>/`, con métricas por problema y un resumen.
+Los JSON, logs y carpetas `bench-*` descritos aquí quedan bajo `detalles/`.
+El Excel conserva las unidades y distingue datos ausentes de ceros.
+
 | Campo | Definición |
 | --- | --- |
 | `usage.prompt_tokens` | Longitud de la entrada exacta guardada, con plantilla y sin volver a añadir tokens especiales |

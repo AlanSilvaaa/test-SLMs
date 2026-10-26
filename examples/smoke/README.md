@@ -14,6 +14,10 @@ Si necesitas un token, copiar `.env.example` a `.env` en la raíz y completar
 uv run --extra infer main.py -n 5 --model SmolLM3
 ```
 
+Para probar otro modelo, reemplazar `SmolLM3` por `llama-1b`, `granite-2b`,
+`phi4-mini`, `qwen3-4b` o `granite-8b`. La [tabla de alias](../../README.md#prueba-rápida-con-flags)
+indica el modelID exacto de cada uno. Cada comando ejecuta solo el modelo elegido.
+
 Busca el modelo en `models/` y lo descarga allí si falta. La estructura conserva
 el modelID y el commit: `models/models--HuggingFaceTB--SmolLM3-3B/snapshots/<commit>/`.
 Usar `--offline` para prohibir descargas o `--models-dir` para cambiar la carpeta.
@@ -41,8 +45,10 @@ uv run --locked --no-sync main.py run --module base_model --action infer \
 Se ejecuta una repetición con cinco solicitudes, solo SmolLM3, sin ejemplos ni
 adaptación. Se inician automáticamente serve y bench sobre loopback. vLLM realiza
 una solicitud inicial adicional de comprobación; los cinco resultados del conjunto
-se guardan en `output/smoke/<ejecución>/generations.jsonl`. La carpeta también
-contiene `performance.json`, resultados nativos `bench-0001/result.json` y logs.
+se guardan en `output/HuggingFaceTB/SmolLM3-3B/<fecha-hora>/resultados.xlsx`, con
+una fila por generación y una hoja de resumen. El comando imprime esa ruta.
+La subcarpeta `detalles/` conserva `generations.jsonl`, `performance.json`,
+resultados nativos `bench-0001/result.json` y logs.
 Un resultado puede registrar un error técnico o de formato: revisar `error`,
 `parse_error` y `output_limit_reached`, además de `problem` y `raw_response`.
 

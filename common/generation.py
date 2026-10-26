@@ -105,6 +105,7 @@ def build_requests(cfg, module, shots):
 
 
 def infer(cfg, module, shots):
+    from common.excel import export_run
     from common.performance import summarize_performance
     from common.runtime import validate_model
 
@@ -112,16 +113,21 @@ def infer(cfg, module, shots):
     shots = shots if module == "few-shot" else 0
     built, inputs = build_requests(cfg, module, shots)
     run = new_run(
-        cfg.output, module, {**cfg.model_dump(), "module": module, "shots": shots}, inputs
+        cfg.output,
+        module,
+        {**cfg.model_dump(), "module": module, "shots": shots},
+        inputs,
+        details=True,
     )
-    engine = LocalBench(cfg, run, use_adapter=module == "lora")
+    artifacts = run / "detalles"
+    engine = LocalBench(cfg, artifacts, use_adapter=module == "lora")
     try:
-        write_json(run / "engine.json", engine.metadata())
+        write_json(artifacts / "engine.json", engine.metadata())
         for item in built:
             item.update(engine.render(item["messages"]))
             base_count = engine.tokenize(conversation(item["request"]))
             item["additional_input_tokens"] = item["input_tokens"] - base_count
-            append_jsonl(run / "requests.jsonl", item)
+            append_jsonl(artifacts / "requests.jsonl", item)
         # Includes the pre-load baseline and startup peak, separate from each bench.
         with MemoryMonitor() as memory:
             engine.start()
@@ -148,10 +154,11 @@ def infer(cfg, module, shots):
                             ).model_dump()
                         except (ValueError, ValidationError) as error:
                             row["parse_error"] = str(error)
-                    append_jsonl(run / "generations.jsonl", row)
-        write_json(run / "memory.json", memory.result())
+                    append_jsonl(artifacts / "generations.jsonl", row)
+        write_json(artifacts / "memory.json", memory.result())
     finally:
         engine.close()
-    summarize_performance(run / "generations.jsonl", run / "performance.json")
-    write_json(run / "status.json", {"status": "complete"})
+    summarize_performance(artifacts / "generations.jsonl", artifacts / "performance.json")
+    export_run(run, status="complete")
+    write_json(artifacts / "status.json", {"status": "complete"})
     return run

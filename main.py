@@ -15,6 +15,11 @@ app = typer.Typer(
 )
 
 
+def show_run(run):
+    excel = Path(run) / "resultados.xlsx"
+    typer.echo(f"Excel: {excel}" if excel.is_file() else run)
+
+
 @app.callback(invoke_without_command=True)
 def quick(
     ctx: typer.Context,
@@ -44,7 +49,7 @@ def quick(
     ] = Path(__file__).resolve().parent / "examples/smoke/requests.jsonl",
     output: Annotated[
         Path, typer.Option("--output", help="Carpeta de resultados de la prueba")
-    ] = Path("output/smoke"),
+    ] = Path("output"),
     port: Annotated[
         int, typer.Option("--port", min=1024, max=65535, help="Puerto local de vLLM")
     ] = 8000,
@@ -73,7 +78,7 @@ def quick(
     typer.echo(f"Prueba base: {model}, {count} solicitudes; pesos en {models_dir}.")
     if not offline:
         typer.echo("Se reutilizarán los pesos locales; si faltan, se descargarán antes de generar.")
-    typer.echo(run_quick(count, model, models_dir, revision, offline, requests, output, port))
+    show_run(run_quick(count, model, models_dir, revision, offline, requests, output, port))
 
 
 class Module(StrEnum):
@@ -106,7 +111,18 @@ def run(
         from common.generation import infer
 
         result = infer(cfg, module.value, shots)
-    typer.echo(result)
+    show_run(result)
+
+
+@app.command("export-excel")
+def export_excel(
+    run_dir: Annotated[Path, typer.Option("--run", exists=True, file_okay=False)],
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+):
+    """Crea un Excel de una ejecución existente sin cargar modelos."""
+    from common.excel import export_run
+
+    typer.echo(export_run(run_dir, output))
 
 
 @app.command()

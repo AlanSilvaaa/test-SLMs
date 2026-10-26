@@ -19,7 +19,7 @@ def run_quick(
     revision=None,
     offline=False,
     requests=DEFAULT_REQUESTS,
-    output=Path("output/smoke"),
+    output=Path("output"),
     port=8000,
 ):
     # Validate input count before any possible download or GPU operation.

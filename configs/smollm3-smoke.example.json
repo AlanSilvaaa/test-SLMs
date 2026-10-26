@@ -7,7 +7,7 @@
   "phase": "development",
   "benchmark": "data/benchmark.jsonl",
   "development": "examples/smoke/requests.jsonl",
-  "output": "output/smoke",
+  "output": "output",
   "repetitions": 1,
   "seed": 42,
   "max_model_len": 4096,
