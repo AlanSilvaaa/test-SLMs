@@ -150,6 +150,41 @@ def export_excel(
     typer.echo(export_run(run_dir, output))
 
 
+@app.command("prepare-pilot")
+def prepare_pilot_command(
+    source: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    oa_source: Annotated[Path, typer.Option("--oa-source", exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option()] = Path("data/pilot"),
+):
+    """Prepara solicitudes piloto desde los Excel, sin generar ni aprobar datos."""
+    from common.pilot_data import prepare_pilot
+
+    typer.echo(prepare_pilot(source, oa_source, output))
+
+
+@app.command("pilot")
+def pilot_command(
+    data: Annotated[Path, typer.Option(exists=True, file_okay=False)] = Path("data/pilot"),
+    output: Annotated[Path, typer.Option()] = Path("output"),
+    models_dir: Annotated[Path, typer.Option("--models-dir")] = DEFAULT_MODELS_DIR,
+    offline: Annotated[bool, typer.Option("--offline")] = False,
+    port: Annotated[int, typer.Option(min=1024, max=65535)] = 8000,
+    background: Annotated[
+        bool, typer.Option("--background", help="Continuar aunque se cierre SSH")
+    ] = False,
+):
+    """Genera las 295 solicitudes piloto con los seis modelos base, una pasada."""
+    from common.pilot import launch_pilot, run_pilot
+
+    if background:
+        pid, log = launch_pilot(data, output, models_dir, offline, port)
+        typer.echo(f"Proceso lanzado en segundo plano. PID: {pid}")
+        typer.echo(f"Registro: {log}")
+        typer.echo(f'Ver avance: tail -f "{log}"')
+    else:
+        run_pilot(data, output, models_dir, offline, port, report=typer.echo)
+
+
 @app.command()
 def prepare(
     dataset: Annotated[Path, typer.Option(exists=True, dir_okay=False)],

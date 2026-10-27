@@ -70,10 +70,10 @@ def prepare(dataset: Path, benchmark: Path, output: Path):
     return run
 
 
-def validate_requests(requests, registry_path):
+def validate_requests(requests, registry_path, *, require_approved=True):
     """Check the frozen OA register, not just an arbitrary count of codes."""
     registry = read_json(registry_path)
-    if registry.get("status") != "approved" or not registry.get("version"):
+    if (require_approved and registry.get("status") != "approved") or not registry.get("version"):
         raise ValueError("El registro de OA debe estar revisado, aprobado y versionado")
     objectives = registry["objectives"]
     by_code = {r["codigo_oa"]: r for r in objectives}

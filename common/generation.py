@@ -19,7 +19,7 @@ def build_requests(cfg, module, shots):
     benchmark_path = Path(cfg.benchmark)
     # A smoke test may precede construction of the final reserved benchmark.
     # If that register exists, always check separation; final runs require it.
-    if cfg.phase == "benchmark" or benchmark_path.exists():
+    if cfg.phase in ("benchmark", "pilot") or benchmark_path.exists():
         benchmark = load_rows(benchmark_path, Request)
     else:
         benchmark = []
@@ -36,7 +36,15 @@ def build_requests(cfg, module, shots):
             raise ValueError("Las mediciones finales requieren al menos dos repeticiones")
         if not cfg.load_conditions.strip():
             raise ValueError("Registra las condiciones de carga del computador experimental")
-    requests = benchmark if cfg.phase == "benchmark" else development
+    if cfg.phase == "pilot":
+        from common.pilot_data import validate_pilot
+
+        if module != "base_model" or cfg.repetitions != 1 or cfg.request_limit is not None:
+            raise ValueError(
+                "El piloto usa solo modelos base, una pasada y las 295 solicitudes completas"
+            )
+        inputs.extend(validate_pilot(cfg))
+    requests = benchmark if cfg.phase in ("benchmark", "pilot") else development
     if cfg.request_limit is not None:
         if cfg.request_limit > len(requests):
             raise ValueError("El límite solicitado supera las solicitudes disponibles")

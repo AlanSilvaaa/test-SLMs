@@ -13,6 +13,17 @@ No ejecutar entrenamiento, generación ni judge en el computador de desarrollo.
 
 ## Prueba rápida con flags
 
+Para dejar los seis modelos base generando las **295 solicitudes piloto** con
+una sola pasada por modelo y continuar tras cerrar SSH, ver la
+[guía de tanda nocturna](docs/pilot-night.md). Con el paquete de datos preparado:
+
+```bash
+uv run --no-sync main.py pilot --background
+```
+
+Este comando registra `phase: pilot`; no constituye el benchmark final ni ejecuta
+el judge.
+
 Si necesitas autenticar las descargas de Hugging Face, copiar `.env.example` a
 `.env` en la raíz del clon y completar `HF_TOKEN`:
 

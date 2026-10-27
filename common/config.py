@@ -13,6 +13,7 @@ def load_config(path: Path) -> Experiment:
         "benchmark",
         "development",
         "oa_registry",
+        "pilot_manifest",
         "skill_review",
         "judge_review",
         "train",

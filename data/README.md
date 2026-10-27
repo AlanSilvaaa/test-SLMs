@@ -1,5 +1,9 @@
 # Datos locales
 
+El paquete local `pilot/` procede de los Excel de la memoria y conserva las 295
+solicitudes piloto para los 59 OA. Está excluido de Git. Su preparación y traslado
+al GX10 se describen en [la guía de tanda nocturna](../docs/pilot-night.md).
+
 Archivos UTF-8 JSONL, un objeto por línea. Se admite también un array JSON.
 Los contratos completos están en `common/contracts.py`. No se distribuyen
 problemas inventados como si fueran ejemplos aceptados.
