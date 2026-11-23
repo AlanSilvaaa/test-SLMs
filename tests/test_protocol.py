@@ -337,46 +337,100 @@ def test_development_cannot_reuse_reserved_request():
         validate_development([{**request(), "version": 2}], [request()])
 
 
-def test_final_benchmark_does_not_accept_one_request(tmp_path):
-    from common.contracts import Experiment
+@pytest.fixture
+def benchmark_v2(tmp_path):
+    from common.data import AXES, V2_DISTRIBUTION
     from common.files import write_json
+
+    path = tmp_path / "benchmark.jsonl"
+    registry = tmp_path / "oa.json"
+    objectives, requests = [], []
+    for course, counts in enumerate(V2_DISTRIBUTION, 1):
+        number = 0
+        for (axis, code), count in zip(AXES.items(), counts, strict=True):
+            for _ in range(count):
+                number += 1
+                if course == 6 and number == 15:
+                    number += 1
+                oa = f"MA{course:02d} OA {number:02d}"
+                objectives.append(dict(codigo_oa=oa, curso=str(course), eje=code, texto_oa="OA"))
+                for variant in range(1, 6):
+                    key = f"BM2-{oa.replace(' ', '-')}-{variant:02d}"
+                    row = request(key, oa)
+                    del row["id"]
+                    row.update(
+                        id_solicitud=key,
+                        version="2.1-candidata",
+                        curso=f"{course}° básico",
+                        texto_oa="OA",
+                        eje=axis,
+                        variante=variant,
+                        tipo_representacion="Figura especificada",
+                        especificacion_representacion="Figura a escala",
+                        estado_revision="Revisada internamente",
+                        observaciones_revision="",
+                        cobertura_banco="Sin ejemplos",
+                        solicitud=f"Solicitud {key}. Devuelve enunciado, descripcion_figura y solucion.",
+                    )
+                    requests.append(row)
+    path.write_text("".join(json.dumps(row) + "\n" for row in requests), encoding="utf-8")
+    write_json(registry, {"status": "approved", "version": "1", "objectives": objectives})
+    return path, registry, requests
+
+
+def test_final_benchmark_does_not_accept_one_request(benchmark_v2, tmp_path):
+    from common.contracts import Experiment
     from common.generation import build_requests
 
-    benchmark, development, registry = [
-        tmp_path / name for name in ("benchmark.jsonl", "development.jsonl", "oa.json")
-    ]
-    append_jsonl(benchmark, request())
+    benchmark, registry, rows = benchmark_v2
+    development = tmp_path / "development.jsonl"
+    benchmark.write_text(json.dumps(rows[0]) + "\n", encoding="utf-8")
     append_jsonl(development, request("development"))
-    # A valid register still cannot legitimize an incomplete benchmark.
-    objectives = []
-    distribution = [
-        (3, 1, 0, 0),
-        (4, 1, 0, 0),
-        (6, 2, 0, 0),
-        (9, 3, 1, 0),
-        (12, 2, 1, 3),
-        (8, 2, 1, 0),
-    ]
-    for course, counts in enumerate(distribution, 1):
-        for axis, count in zip(("numeros", "medicion", "patrones", "datos"), counts):
-            for i in range(count):
-                objectives.append(
-                    {
-                        "codigo_oa": f"{course}-{axis}-{i}",
-                        "curso": str(course),
-                        "eje": axis,
-                        "texto_oa": "Texto OA",
-                    }
-                )
-    write_json(registry, {"status": "approved", "version": "1", "objectives": objectives})
     cfg = Experiment(
         model={"path": "fake", "revision": "abc"},
         benchmark=str(benchmark),
         development=str(development),
         oa_registry=str(registry),
     )
-    with pytest.raises(ValueError, match="295"):
+    with pytest.raises(ValueError, match="725"):
         build_requests(cfg, "base_model", 0)
+
+
+def test_benchmark_base_checks_full_candidate_without_runtime(benchmark_v2, monkeypatch):
+    benchmark, _, _ = benchmark_v2
+    monkeypatch.setattr("common.quick.check_inference_runtime", lambda: pytest.fail("runtime"))
+    result = CliRunner().invoke(
+        app, ["benchmark-base", "--benchmark", str(benchmark), "--check-only"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "2.1-candidata validado: 725 solicitudes" in result.output
+
+
+def test_v2_base_preserves_prompt_and_figure_metadata(benchmark_v2, tmp_path):
+    from common.contracts import Experiment, GeneratedProblem
+    from common.excel import result_values
+    from common.generation import build_requests
+
+    benchmark, registry, expected = benchmark_v2
+    development = tmp_path / "development.jsonl"
+    append_jsonl(development, request("development"))
+    cfg = Experiment(
+        model={"path": "fake", "revision": "abc"},
+        benchmark=str(benchmark),
+        development=str(development),
+        oa_registry=str(registry),
+        load_conditions="Prueba sin pesos",
+    )
+    built, inputs = build_requests(cfg, "base_model", 0)
+    assert len(built) == 725 and benchmark in inputs and registry in inputs
+    assert built[0]["request"]["id"] == expected[0]["id_solicitud"]
+    assert built[0]["request"]["version"] == expected[0]["version"]
+    assert built[0]["messages"] == [{"role": "user", "content": expected[0]["solicitud"]}]
+    problem = GeneratedProblem(enunciado="Texto", solucion="Solución", descripcion_figura="Escala")
+    row = {**built[0], "problem": problem.model_dump()}
+    assert result_values(row, 1, {})["descripcion_figura"] == "Escala"
+    row["problem"]["descripcion_figura"] = ""
+    assert result_values(row, 1, {})["state"] == "Descripción de figura ausente"
 
 
 def test_smollm3_smoke_builds_exactly_five_base_requests_without_benchmark(tmp_path):

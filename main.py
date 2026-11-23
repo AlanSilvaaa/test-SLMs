@@ -139,6 +139,32 @@ def run(
     show_run(result)
 
 
+@app.command("benchmark-base")
+def benchmark_base(
+    benchmark: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    model: Annotated[str, typer.Option("--model", "-m")] = "SmolLM3",
+    models_dir: Annotated[Path, typer.Option("--models-dir")] = DEFAULT_MODELS_DIR,
+    revision: Annotated[str | None, typer.Option("--revision")] = None,
+    offline: Annotated[bool, typer.Option("--offline")] = False,
+    output: Annotated[Path, typer.Option("--output")] = Path("output"),
+    port: Annotated[int, typer.Option(min=1024, max=65535)] = 8000,
+    check_only: Annotated[
+        bool, typer.Option("--check-only", help="Validar las solicitudes sin cargar pesos")
+    ] = False,
+):
+    """Prueba base con las 725 solicitudes del benchmark v2 de la memoria."""
+    from common.quick import run_benchmark_base
+
+    result = run_benchmark_base(
+        benchmark, model, models_dir, revision, offline, output, port, check_only
+    )
+    if check_only:
+        count, version = result
+        typer.echo(f"Benchmark {version} validado: {count} solicitudes.")
+    else:
+        show_run(result)
+
+
 @app.command("export-excel")
 def export_excel(
     run_dir: Annotated[Path, typer.Option("--run", exists=True, file_okay=False)],

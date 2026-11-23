@@ -1,8 +1,9 @@
 """Explicit, versioned contracts. No ML libraries are imported here."""
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DIMENSIONS = (
     "solvability",
@@ -29,6 +30,32 @@ class Request(Contract):
     solicitud: str = Field(min_length=1)
 
 
+class BenchmarkV2Request(Request):
+    id: str = Field(alias="id_solicitud", min_length=1)
+    version: str = Field(pattern=r"^2\.\d+(?:-[a-z]+)?$")
+    eje: Literal[
+        "Números y operaciones",
+        "Patrones y álgebra",
+        "Geometría",
+        "Medición",
+        "Datos y probabilidades",
+    ]
+    variante: int = Field(ge=1, le=5)
+    tipo_representacion: Literal["Texto", "Figura especificada", "Tabla o registro textual"]
+    especificacion_representacion: str = Field(min_length=1)
+    estado_revision: str
+    observaciones_revision: str
+    cobertura_banco: str
+
+    @field_validator("curso")
+    @classmethod
+    def normalize_course(cls, value):
+        match = re.fullmatch(r"([1-6])° básico", value)
+        if match is None:
+            raise ValueError("Curso del benchmark v2 no reconocido")
+        return match[1]
+
+
 class Problem(Contract):
     enunciado: str = Field(min_length=1)
     solucion: str = Field(min_length=1)
@@ -37,6 +64,7 @@ class Problem(Contract):
 class GeneratedProblem(Contract):
     enunciado: str = Field(min_length=1)
     solucion: str | None = None
+    descripcion_figura: str | None = None
 
 
 class Example(Request, Problem):
@@ -53,7 +81,7 @@ class Model(Contract):
 class Experiment(Contract):
     model: Model
     benchmark: str
-    phase: Literal["benchmark", "development", "pilot"] = "benchmark"
+    phase: Literal["benchmark", "development", "pilot", "benchmark_candidate"] = "benchmark"
     pilot_manifest: str | None = None
     request_limit: int | None = Field(default=None, ge=1)
     development: str = "data/development.jsonl"

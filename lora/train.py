@@ -82,7 +82,7 @@ def train(cfg):
     train_rows = load_rows(cfg.train, Example)
     validation_rows = load_rows(cfg.validation, Example)
     requests = load_rows(cfg.benchmark, Request)
-    validate_requests(requests, cfg.oa_registry)
+    validate_requests(requests, cfg.oa_registry, legacy=True)
     development = load_rows(cfg.development, Request)
     validate_development(development, requests)
     validate_separation(train_rows, validation_rows, requests)

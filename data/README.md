@@ -4,11 +4,16 @@ El paquete local `pilot/` procede de los Excel de la memoria y conserva las 295
 solicitudes piloto para los 59 OA. Está excluido de Git. Su preparación y traslado
 al GX10 se describen en [la guía de tanda nocturna](../docs/pilot-night.md).
 
-Archivos UTF-8 JSONL, un objeto por línea. Se admite también un array JSON.
+El benchmark v2 de la memoria se utiliza directamente con `benchmark-base` y
+`run` en fase `benchmark`. Conserva `id_solicitud`, la versión textual y los
+metadatos de representación del JSONL original. El archivo queda excluido de Git.
+
+Los archivos internos de desarrollo y del piloto histórico usan UTF-8 JSONL,
+un objeto por línea. Se admite también un array JSON.
 Los contratos completos están en `common/contracts.py`. No se distribuyen
 problemas inventados como si fueran ejemplos aceptados.
 
-Cada solicitud requiere `id`, `version` (entero desde 1), `curso`, `codigo_oa`,
+Cada solicitud en el formato interno requiere `id`, `version` (entero desde 1), `curso`, `codigo_oa`,
 `texto_oa`, `habilidad_evaluada`, `condiciones_curriculares`, `contexto` y
 `solicitud` (instrucción completa). Todos los textos deben ser no vacíos.
 
@@ -44,8 +49,8 @@ registro de selección de la memoria, con esta estructura:
 ```
 
 El ejemplo muestra solo la estructura; no constituye un registro válido. Se
-requieren los 59 OA reales, sin duplicados. `curso` utiliza las cadenas `"1"` a
-`"6"`; `eje` utiliza `numeros`, `medicion`, `patrones` o `datos`. Se verifica la
+requieren los 145 OA reales, sin duplicados. `curso` utiliza las cadenas `"1"` a
+`"6"`; `eje` utiliza `numeros`, `medicion`, `patrones`, `geometria` o `datos`. Se verifica la
 distribución por curso/eje de la tabla de la memoria y que cada solicitud tenga
 el curso y texto exactos del OA registrado. Normalizar esos campos al preparar los
 datos, sin reemplazar ni resumir el texto oficial. No se incluyen OA inventados.
@@ -53,7 +58,7 @@ datos, sin reemplazar ni resumir el texto oficial. No se incluyen OA inventados.
 `development` es otro archivo Request JSONL, con solicitudes diferentes de las
 reservadas para benchmark. El generador usa este archivo con
 `phase: "development"`. Con `phase: "benchmark"` exige cinco solicitudes por cada
-OA registrado, 295 en total, y comprueba la separación con desarrollo.
+OA registrado, 725 en total, y comprueba la separación con desarrollo.
 
 El dataset aceptado debe contener **una sola versión por ID**. Una nueva versión
 conserva el historial en el banco de candidatos, pero no se incorpora junto a la

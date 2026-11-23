@@ -39,6 +39,8 @@ RESULT_COLUMNS = [
     ("Respuesta original", "raw_response", 65),
     ("Modelo", "model_id", 40),
     ("Revisión del modelo", "model_revision", 44),
+    ("Tipo de representación", "tipo_representacion", 28),
+    ("Descripción de figura", "descripcion_figura", 65),
 ]
 METRICS = {
     "ttft_s": ("Tiempo hasta el primer token", "s"),
@@ -68,7 +70,11 @@ def _state(row):
         return "Error de formato"
     if row.get("output_limit_reached"):
         return "Límite de salida alcanzado"
-    if not (row.get("problem") or {}).get("solucion"):
+    if (row.get("request") or {}).get("tipo_representacion") == "Figura especificada" and not row[
+        "problem"
+    ].get("descripcion_figura"):
+        return "Descripción de figura ausente"
+    if not row["problem"].get("solucion"):
         return "Solución ausente"
     return "Sin errores técnicos"
 
@@ -205,7 +211,10 @@ def export_run(run, output=None, *, status=None):
         for column, (label, key, width) in enumerate(RESULT_COLUMNS, 1):
             put(results, index + 1, column, values.get(key), label)
         # Fit typical full problem/solution text; preserve all text for longer cells.
-        lines = max(len(str(values.get(k) or "")) / 80 for k in ("enunciado", "solucion"))
+        lines = max(
+            len(str(values.get(k) or "")) / 80
+            for k in ("enunciado", "solucion", "descripcion_figura")
+        )
         results.row_dimensions[index + 1].height = min(360, max(80, 20 * (int(lines) + 2)))
     results.freeze_panes = "E2"
     results.sheet_properties.tabColor = navy

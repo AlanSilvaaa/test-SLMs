@@ -5,17 +5,11 @@ import shutil
 from pathlib import Path
 
 from common.contracts import Request
-from common.data import normalized, validate_development, validate_requests
+from common.data import AXES, normalized, validate_development, validate_requests
 from common.files import append_jsonl, load_rows, read_json, sha256, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PILOT = ROOT / "data/pilot"
-AXES = {
-    "Números y operaciones": "numeros",
-    "Medición": "medicion",
-    "Patrones y álgebra": "patrones",
-    "Datos y probabilidades": "datos",
-}
 
 
 def sheet_rows(book, sheet):
@@ -46,6 +40,7 @@ def prepare_pilot(source, oa_source, output=DEFAULT_PILOT):
             benchmark = sheet_rows(book, "Benchmark piloto")
         finally:
             book.close()
+    pilot_codes = {row["codigo_oa"] for row in benchmark}
     with oa_source.open("rb") as stream:
         book = load_workbook(stream, read_only=True, data_only=True)
         try:
@@ -57,7 +52,7 @@ def prepare_pilot(source, oa_source, output=DEFAULT_PILOT):
                     "texto_oa": row["texto_original"],
                 }
                 for row in sheet_rows(book, "OA")
-                if str(row["usable"]).strip().casefold() in ("si", "sí")
+                if row["codigo_oa"] in pilot_codes
             ]
         finally:
             book.close()
@@ -100,7 +95,7 @@ def prepare_pilot(source, oa_source, output=DEFAULT_PILOT):
         write_json(
             output / "oa.json", {"version": "pilot-v1", "status": "draft", "objectives": objectives}
         )
-        validate_requests(requests, output / "oa.json", require_approved=False)
+        validate_requests(requests, output / "oa.json", legacy=True, require_approved=False)
         for name, rows in (("benchmark.jsonl", requests), ("dataset-requests.jsonl", exclusions)):
             for row in rows:
                 append_jsonl(output / name, row)
@@ -146,7 +141,7 @@ def validate_pilot(cfg):
     ):
         raise ValueError("Las rutas no corresponden al paquete piloto")
     requests = load_rows(cfg.benchmark, Request)
-    validate_requests(requests, cfg.oa_registry, require_approved=False)
+    validate_requests(requests, cfg.oa_registry, legacy=True, require_approved=False)
     validate_development(load_rows(path.parent / "dataset-requests.jsonl", Request), requests)
     validate_development(load_rows(cfg.development, Request), requests)
     return [path, *(path.parent / name for name in sorted(names))]

@@ -7,7 +7,13 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from common.contracts import Example, GeneratedProblem, Request
-from common.data import validate_development, validate_requests, validate_separation
+from common.data import (
+    load_benchmark,
+    validate_benchmark_v2,
+    validate_development,
+    validate_requests,
+    validate_separation,
+)
 from common.files import append_jsonl, load_rows, new_run, read_json, sha256, write_json
 from common.inference import LocalBench
 from common.monitor import MemoryMonitor
@@ -19,8 +25,11 @@ def build_requests(cfg, module, shots):
     benchmark_path = Path(cfg.benchmark)
     # A smoke test may precede construction of the final reserved benchmark.
     # If that register exists, always check separation; final runs require it.
-    if cfg.phase in ("benchmark", "pilot") or benchmark_path.exists():
-        benchmark = load_rows(benchmark_path, Request)
+    reserved_phase = cfg.phase in ("benchmark", "pilot", "benchmark_candidate")
+    if reserved_phase or benchmark_path.exists():
+        benchmark = load_benchmark(
+            benchmark_path, require_v2=cfg.phase in ("benchmark", "benchmark_candidate")
+        )
     else:
         benchmark = []
     validate_development(development, benchmark)
@@ -36,6 +45,12 @@ def build_requests(cfg, module, shots):
             raise ValueError("Las mediciones finales requieren al menos dos repeticiones")
         if not cfg.load_conditions.strip():
             raise ValueError("Registra las condiciones de carga del computador experimental")
+    if cfg.phase == "benchmark_candidate":
+        if module != "base_model" or cfg.repetitions != 1 or cfg.request_limit is not None:
+            raise ValueError(
+                "La prueba candidata requiere modelo base, una pasada y el conjunto completo"
+            )
+        validate_benchmark_v2(benchmark)
     if cfg.phase == "pilot":
         from common.pilot_data import validate_pilot
 
@@ -44,7 +59,7 @@ def build_requests(cfg, module, shots):
                 "El piloto usa solo modelos base, una pasada y las 295 solicitudes completas"
             )
         inputs.extend(validate_pilot(cfg))
-    requests = benchmark if cfg.phase in ("benchmark", "pilot") else development
+    requests = benchmark if reserved_phase else development
     if cfg.request_limit is not None:
         if cfg.request_limit > len(requests):
             raise ValueError("El límite solicitado supera las solicitudes disponibles")

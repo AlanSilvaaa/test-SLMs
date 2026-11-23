@@ -27,21 +27,23 @@ def user_prompt(row):
 
 
 def conversation(row, examples=(), instructions=""):
-    messages = [
-        {"role": "system", "content": SYSTEM + ("\n\n" + instructions if instructions else "")}
-    ]
+    v2 = "tipo_representacion" in row
+    messages = []
+    system = instructions if v2 else SYSTEM + ("\n\n" + instructions if instructions else "")
+    if system:
+        messages.append({"role": "system", "content": system})
     for example in examples:
+        answer = {"enunciado": example["enunciado"], "solucion": example["solucion"]}
+        if v2:
+            answer["descripcion_figura"] = example.get("descripcion_figura", "")
         messages.extend(
             [
                 {"role": "user", "content": user_prompt(example)},
                 {
                     "role": "assistant",
-                    "content": json.dumps(
-                        {"enunciado": example["enunciado"], "solucion": example["solucion"]},
-                        ensure_ascii=False,
-                    ),
+                    "content": json.dumps(answer, ensure_ascii=False),
                 },
             ]
         )
-    messages.append({"role": "user", "content": user_prompt(row)})
+    messages.append({"role": "user", "content": row["solicitud"] if v2 else user_prompt(row)})
     return messages

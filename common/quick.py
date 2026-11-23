@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from common.contracts import Experiment, Request
+from common.contracts import Experiment, Model, Request
 from common.files import load_rows
 from common.inference import check_local_port
 from common.models import DEFAULT_MODELS_DIR, prepare_model
@@ -45,4 +45,27 @@ def run_quick(
     )
     from common.generation import infer
 
+    return infer(cfg, "base_model", 0)
+
+
+def run_benchmark_base(benchmark, model, models_dir, revision, offline, output, port, check_only):
+    from common.generation import build_requests, infer
+
+    cfg = Experiment(
+        model=Model(path="not-loaded", revision="not-loaded"),
+        phase="benchmark_candidate",
+        benchmark=str(Path(benchmark).resolve()),
+        development=str(DEFAULT_REQUESTS),
+        output=str(Path(output).resolve()),
+        repetitions=1,
+        port=port,
+    )
+    built, _ = build_requests(cfg, "base_model", 0)
+    if check_only:
+        return len(built), built[0]["request"]["version"]
+    check_inference_runtime()
+    check_local_port(port)
+    cfg.model = prepare_model(model, models_dir, revision, offline=offline)
+    if "SmolLM3" in (cfg.model.id or ""):
+        cfg.chat_template_kwargs = {"enable_thinking": False}
     return infer(cfg, "base_model", 0)

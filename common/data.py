@@ -2,10 +2,10 @@
 
 import random
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
-from common.contracts import Example, Request
+from common.contracts import BenchmarkV2Request, Example, Request
 from common.files import append_jsonl, load_rows, new_run, read_json, write_json
 
 
@@ -70,43 +70,106 @@ def prepare(dataset: Path, benchmark: Path, output: Path):
     return run
 
 
-def validate_requests(requests, registry_path, *, require_approved=True):
-    """Check the frozen OA register, not just an arbitrary count of codes."""
-    registry = read_json(registry_path)
-    if (require_approved and registry.get("status") != "approved") or not registry.get("version"):
-        raise ValueError("El registro de OA debe estar revisado, aprobado y versionado")
-    objectives = registry["objectives"]
-    by_code = {r["codigo_oa"]: r for r in objectives}
-    if len(objectives) != 59 or len(by_code) != 59:
-        raise ValueError("El registro requiere los 59 OA seleccionados")
-    # Course is stored canonically as the strings '1' through '6'.
-    from collections import Counter
+AXES = {
+    "Números y operaciones": "numeros",
+    "Patrones y álgebra": "patrones",
+    "Geometría": "geometria",
+    "Medición": "medicion",
+    "Datos y probabilidades": "datos",
+}
+V2_DISTRIBUTION = [
+    (10, 2, 3, 3, 2),
+    (11, 2, 3, 3, 3),
+    (11, 2, 5, 4, 4),
+    (12, 2, 5, 5, 3),
+    (13, 2, 3, 4, 5),
+    (8, 3, 5, 4, 3),
+]
+PILOT_DISTRIBUTION = [
+    (3, 0, 0, 1, 0),
+    (4, 0, 0, 1, 0),
+    (6, 0, 0, 2, 0),
+    (9, 1, 0, 3, 0),
+    (12, 1, 0, 2, 3),
+    (8, 1, 0, 2, 0),
+]
+V2_REQUESTS = 725
 
-    expected = {
-        "1": {"numeros": 3, "medicion": 1},
-        "2": {"numeros": 4, "medicion": 1},
-        "3": {"numeros": 6, "medicion": 2},
-        "4": {"numeros": 9, "medicion": 3, "patrones": 1},
-        "5": {"numeros": 12, "medicion": 2, "patrones": 1, "datos": 3},
-        "6": {"numeros": 8, "medicion": 2, "patrones": 1},
-    }
-    actual = Counter((r["curso"], r["eje"]) for r in objectives)
-    target = Counter(
-        {(course, axis): n for course, axes in expected.items() for axis, n in axes.items()}
+
+def load_benchmark(path, *, require_v2=False):
+    rows = load_rows(path)
+    if require_v2 or any("id_solicitud" in row for row in rows):
+        return [BenchmarkV2Request.model_validate(row).model_dump() for row in rows]
+    return load_rows(path, Request)
+
+
+def validate_coverage(objectives, distribution):
+    expected = Counter(
+        {
+            (str(course), axis): count
+            for course, counts in enumerate(distribution, 1)
+            for axis, count in zip(AXES.values(), counts, strict=True)
+            if count
+        }
     )
-    if actual != target:
+    actual = Counter((r["curso"], r["eje"]) for r in objectives)
+    if actual != expected:
         raise ValueError("La distribución curso/eje no coincide con la tabla de la memoria")
+
+
+def validate_request_counts(requests, codes, expected):
     if len({r["id"] for r in requests}) != len(requests):
         raise ValueError("El benchmark debe contener una sola versión por solicitud")
     if len({normalized(r["solicitud"]) for r in requests}) != len(requests):
         raise ValueError("El benchmark contiene solicitudes literales duplicadas")
     counts = Counter(r["codigo_oa"] for r in requests)
-    if len(requests) != 295 or set(counts) != set(by_code) or set(counts.values()) != {5}:
-        raise ValueError("Benchmark final: se requieren 295 solicitudes, cinco por cada OA")
+    if len(requests) != expected or set(counts) != set(codes) or set(counts.values()) != {5}:
+        raise ValueError(f"Se requieren {expected} solicitudes, cinco por cada OA")
+
+
+def validate_benchmark_v2(requests):
+    objectives = {}
+    if len({r["version"] for r in requests}) != 1:
+        raise ValueError("Todas las solicitudes deben pertenecer a la misma versión")
+    for row in requests:
+        code, variant = row["codigo_oa"], row["variante"]
+        course = row["curso"]
+        if (
+            not re.fullmatch(rf"MA0{course} OA [0-9]{{2}}", code)
+            or not 1 <= int(code[-2:]) <= (20, 22, 26, 27, 27, 24)[int(course) - 1]
+            or code == "MA06 OA 15"
+            or row["id"] != f"BM2-{code.replace(' ', '-')}-{variant:02d}"
+        ):
+            raise ValueError(f"{row['id']}: identificador, OA o curso inválido")
+        oa = {"curso": course, "eje": AXES[row["eje"]], "texto_oa": row["texto_oa"]}
+        if objectives.setdefault(code, oa) != oa:
+            raise ValueError(f"{code}: metadatos curriculares inconsistentes")
+    validate_request_counts(requests, objectives, V2_REQUESTS)
+    validate_coverage(objectives.values(), V2_DISTRIBUTION)
+
+
+def validate_requests(requests, registry_path, *, legacy=False, require_approved=True):
+    """Compare final requests against the approved register, independently of the file."""
+    expected = 295 if legacy else V2_REQUESTS
+    registry = read_json(registry_path)
+    if (require_approved and registry.get("status") != "approved") or not registry.get("version"):
+        raise ValueError("El registro de OA debe estar revisado, aprobado y versionado")
+    objectives = registry["objectives"]
+    by_code = {r["codigo_oa"]: r for r in objectives}
+    if len(objectives) != expected // 5 or len(by_code) != expected // 5:
+        raise ValueError(f"El registro requiere los {expected // 5} OA seleccionados")
+    validate_coverage(objectives, PILOT_DISTRIBUTION if legacy else V2_DISTRIBUTION)
+    validate_request_counts(requests, by_code, expected)
+    if not legacy:
+        validate_benchmark_v2(requests)
     for row in requests:
         oa = by_code[row["codigo_oa"]]
-        if row["curso"] != oa["curso"] or row["texto_oa"] != oa["texto_oa"]:
-            raise ValueError(f"{row['id']}: curso o texto OA no coincide con el registro")
+        if (
+            row["curso"] != oa["curso"]
+            or row["texto_oa"] != oa["texto_oa"]
+            or (not legacy and AXES[row["eje"]] != oa["eje"])
+        ):
+            raise ValueError(f"{row['id']}: curso, eje o texto OA no coincide con el registro")
 
 
 def validate_development(development, benchmark):

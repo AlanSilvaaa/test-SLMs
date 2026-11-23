@@ -11,6 +11,28 @@ memoria. El benchmark oficial utiliza HTTP sobre loopback; no utiliza Internet,
 proveedores externos, clientes HTTP propios ni la API Python `LLM.generate`.
 No ejecutar entrenamiento, generación ni judge en el computador de desarrollo.
 
+## Prueba base con el benchmark actualizado
+
+Usar el `benchmark_v2.jsonl` de la memoria, versión 2.1-candidata. El archivo
+contiene 145 OA con cinco solicitudes por OA. Copiarlo al equipo experimental
+como `data/benchmark.jsonl`. Se utiliza el JSONL original y se conserva su huella,
+su versión y sus identificadores.
+
+```bash
+# Validar el archivo y preparar los 725 mensajes sin pesos ni GPU
+uv run main.py benchmark-base --benchmark data/benchmark.jsonl --check-only
+
+# En el equipo experimental, una pasada de las 725 solicitudes con SmolLM3
+uv run --extra infer main.py benchmark-base --benchmark data/benchmark.jsonl --model SmolLM3 --offline
+```
+
+El comando registra `phase: benchmark_candidate`, conserva el prompt de cada
+solicitud y exporta la descripción de figura cuando el modelo la entrega. La
+prueba base usa las 725 solicitudes completas y requiere solo los datos del
+benchmark y los pesos locales para generar. Cambiar `--model` para elegir otro
+SLM. Las pruebas que se usarán para ajustar el prompt, la decodificación o el
+juez se ejecutan con solicitudes de desarrollo distintas.
+
 ## Prueba rápida con flags
 
 Para dejar los seis modelos base generando las **295 solicitudes piloto** con
@@ -169,7 +191,8 @@ el dataset ni el benchmark final; si el archivo reservado existe, sí se comprue
 la separación. Las cinco solicitudes incluidas son sintéticas y no representan OA
 oficiales. El modo benchmark conserva sus requisitos completos.
 
-Ver [data/README.md](data/README.md). Exportar solo una versión aceptada por candidato:
+Ver [data/README.md](data/README.md). Para importar el formato anterior
+MathGenBench-CL y preparar las particiones del protocolo histórico:
 
 ```bash
 uv run main.py import-benchmark \
@@ -182,6 +205,8 @@ Produce train/validation 34/6 por OA (2006/354 pares), semilla 42, y cuatro
 identificadores de demostraciones por OA tomados solo de train. La revisión
 pedagógica y la detección de paráfrasis siguen siendo necesarias. Se rechazan IDs
 compartidos entre train/validation aunque sus versiones y textos sean distintos.
+La prueba base con v2.1 funciona directamente sobre el JSONL. La preparación
+del banco aceptado y el entrenamiento LoRA siguen el flujo histórico aquí descrito.
 
 Completar `configs/experiment.json` a partir del ejemplo. Las rutas de datos son
 relativas a la raíz situada sobre `configs/`. Para ejecutar se requieren:
@@ -189,9 +214,9 @@ relativas a la raíz situada sobre `configs/`. Para ejecutar se requieren:
 - `benchmark`: las solicitudes finales reservadas.
 - `development`: otras solicitudes para ajuste y pruebas, sin IDs ni solicitudes
   literales del benchmark. Desarrollo tampoco puede solaparse con los ejemplos.
-- `oa_registry`: el registro local revisado de los 59 OA, con curso, eje y texto
+- `oa_registry`: el registro local revisado de los 145 OA, con curso, eje y texto
   exacto. El benchmark se contrasta con su identidad y con la distribución de la
-  tabla de la memoria, además de exigir 295 solicitudes.
+  tabla de la memoria, además de exigir 725 solicitudes en el formato original v2.
 - `phase`: `development` utiliza las solicitudes de desarrollo; `benchmark` exige
   el conjunto completo y al menos dos repeticiones. El ejemplo usa tres repeticiones:
   es una decisión operativa explícita, no un número fijado en la memoria.
