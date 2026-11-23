@@ -186,7 +186,7 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch, 
     from common.files import write_json
     from judge.evaluate import evaluate
 
-    rubric = read_json(Path(__file__).parent.parent / "configs/rubric.draft.json")
+    rubric = read_json(Path(__file__).parent.parent / "configs/rubric.v0.3-draft.json")
     rubric["status"] = "approved"
     rubric_path = tmp_path / "rubric.json"
     write_json(rubric_path, rubric)
@@ -198,7 +198,11 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch, 
             "repetition": 0,
             "model": "SECRET_MODEL",
             "phase": "development",
-            "problem": {"enunciado": "¿Cuánto es 2 + 3?", "solucion": proposed},
+            "problem": {
+                "enunciado": "¿Cuánto es 2 + 3?",
+                "solucion": proposed,
+                "descripcion_figura": "FIGURA_DESCRITA",
+            },
             "error": None,
         },
     )
@@ -220,8 +224,9 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch, 
         def close(self):
             pass
 
-        def complete(self, messages, schema, **kwargs):
-            text = json.dumps(messages)
+        def batch(self, messages, schema, **kwargs):
+            assert len(messages) == 1
+            text = json.dumps(messages[0])
             calls.append(text)
             if len(calls) == 1:
                 value = {key: {"score": 1, "reason": ""} for key in schema["required"]}
@@ -233,7 +238,7 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch, 
                         "reason": "La propuesta no contiene procedimiento",
                     },
                 }
-            return {"raw_response": json.dumps(value), "finish_reason": "stop"}
+            return [{"raw_response": json.dumps(value), "finish_reason": "stop"}]
 
     monkeypatch.setattr("judge.evaluate.LocalBench", FakeJudge)
     monkeypatch.setattr("judge.evaluate.validate_model", lambda *args, **kwargs: None)
@@ -249,6 +254,7 @@ def test_judge_stages_are_blind_and_solution_is_separate(tmp_path, monkeypatch, 
     assert record["solution"]["score"] == 0
     assert len(calls) == 2
     assert all("SECRET_MODEL" not in text for text in calls)
+    assert all("FIGURA_DESCRITA" in text for text in calls)
     assert all("SECRET_SOLUTION" not in text for text in calls[:1])
     if proposed:
         assert "SECRET_SOLUTION" in calls[1]

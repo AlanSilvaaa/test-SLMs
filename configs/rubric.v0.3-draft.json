@@ -1,0 +1,32 @@
+{
+  "version": "0.3-draft",
+  "status": "draft",
+  "criteria": [
+    {
+      "id": "solvability",
+      "descriptor": "1 si el enunciado y sus representaciones dan datos y relaciones suficientes y compatibles para determinar una respuesta o un conjunto verificable, sin inventar información. 0 si faltan datos indispensables, hay incompatibilidades, falta una tarea matemática o no se puede determinar una respuesta verificable."
+    },
+    {
+      "id": "linguistic_clarity",
+      "descriptor": "1 si se comprenden la pregunta, sus referentes y relaciones con lenguaje adecuado al curso. 0 si la redacción, los referentes o el vocabulario generan ambigüedad relevante o dificultan la comprensión. Un error lingüístico menor que no altera la comprensión no basta para asignar 0."
+    },
+    {
+      "id": "contextual_coherence",
+      "descriptor": "1 si cantidades, acciones, magnitudes, unidades y resultados admisibles son consistentes dentro de la situación, incluso si es ficticia. 0 ante contradicciones contextuales, magnitudes o unidades incompatibles, o resultados sin sentido en la situación."
+    },
+    {
+      "id": "pedagogical_appropriateness",
+      "descriptor": "1 si relaciones matemáticas, ámbito numérico, pasos exigidos y tema son pertinentes para el curso y propósito. 0 si la complejidad es incompatible con el curso o propósito o el tema es inapropiado para el contexto escolar."
+    },
+    {
+      "id": "curriculum_alignment",
+      "descriptor": "1 si responder requiere movilizar el componente del OA y la habilidad solicitados respetando las condiciones curriculares. 0 si la respuesta prescinde de ese aprendizaje, requiere otra habilidad o incumple condiciones curriculares necesarias."
+    },
+    {
+      "id": "representation_appropriateness",
+      "descriptor": "1 si las representaciones son correctas y suficientes para abordar la tarea y no faltan apoyos indispensables. En una figura descrita, verifica que se especifiquen los datos y relaciones necesarios. 0 si falta una representación indispensable o contiene errores u omisiones relevantes. Evalúa la legibilidad visual solo si se aporta la imagen. Un problema textual puede cumplir si el texto aporta toda la información necesaria y no exige apoyos omitidos."
+    }
+  ],
+  "solution_descriptor": "Comprueba la solución con el enunciado y la representación disponibles. Verifica procedimiento, cálculos, razonamiento, respuesta y unidades cuando corresponda. Valora la solución por separado de las dimensiones del enunciado.",
+  "request_descriptor": "Registra por separado si el enunciado cumple el contexto, la modalidad de representación y las restricciones adicionales solicitadas. Considera únicamente un nivel de Bloom explícito en la solicitud. Conserva las puntuaciones de la rúbrica."
+}

@@ -319,32 +319,32 @@ y secuencias más largas debe realizarse antes de los 18 entrenamientos en Patag
 
 ## Judge y revisión docente
 
-La rúbrica original se conserva. `configs/rubric.v0.2-draft.json` incorpora
-explícitamente la regla de la memoria sobre errores lingüísticos menores. Sigue
-siendo **draft**: revisar, calibrar y versionar antes de aprobarla. El ejecutor
-rechaza rúbricas draft y exige exactamente las cinco dimensiones previstas.
+La rúbrica v0.3 contiene las seis dimensiones de la memoria, incluida la
+adecuación de las representaciones. Se conserva en borrador para calibración.
+Usa `--allow-draft` de forma explícita en las fases `development` y
+`benchmark_candidate`. La fase final requiere una rúbrica aprobada y un
+`judge_review` con su SHA-256, revisión manual y fuentes de desarrollo separadas.
 
-Completar `configs/judge.json` con Gemma 3 27B IT. El juez usa los mismos comandos
-oficiales locales, después de medir los generadores. En `phase: "development"`
-permite calibrar con generaciones de desarrollo y una rúbrica aprobada para esa
-revisión. Para el benchmark requiere `judge_review`: `status: "approved"`,
-`rubric_sha256`, `manual_review` y `development_sources` (rutas absolutas a archivos
-de generaciones de desarrollo), separados de las solicitudes finales. La fase de
-las generaciones debe coincidir con la del juez.
+El judge recibe un JSONL de generaciones. `prepare-judge` recupera el objeto
+original cuando solo sobra el envoltorio Markdown y conserva las demás filas con
+su estado técnico y la huella del archivo original.
 
 ```bash
+uv run main.py prepare-judge --source output/MODEL/FECHA/detalles/generations.jsonl \
+  --output data/generations-judge.jsonl
 uv run --extra infer main.py judge --config configs/judge.json \
-  --source output/MODEL/FECHA/detalles/generations.jsonl --rubric configs/rubric.v1.json
-uv run main.py summarize --source output/JUDGE/evaluations.jsonl --output summary.json
+  --source data/generations-judge.jsonl --rubric configs/rubric.v0.3-draft.json \
+  --allow-draft --check-only
 ```
 
-Dos etapas: (1) enunciado, curso/OA y rúbrica, sin solución ni identidad del
-modelo; (2) solo si es resoluble, comprobar la solución y registrar procedimiento
-independiente y corrección. La segunda etapa ve la propuesta, como indica la memoria;
-no equivale a una resolución ciega previa. En el dataset, la resolución independiente
-antes de consultar la propuesta sigue siendo responsabilidad del investigador.
-Los puntajes de solución y ajuste a la solicitud quedan fuera del conjunto de cinco.
-Los errores técnicos se conservan como ausentes y no se convierten en puntajes 0.
+El judge evalúa el enunciado junto con su descripción de figura, curso y OA, de
+forma ciega respecto de la solución y del generador. Comprueba la solución por
+separado en los enunciados resolubles. El ajuste a la solicitud queda fuera del
+cumplimiento conjunto de las seis dimensiones. Los fallos técnicos quedan
+identificados como ausentes.
+
+En Patagón se usan [los trabajos Slurm para el judge](docs/judge-patagon.md).
+El resumen se obtiene con `main.py summarize`.
 
 ```bash
 # Muestra del dataset: 118 problemas, dos por OA

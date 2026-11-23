@@ -10,7 +10,10 @@ def summarize(source, output):
     if len(versions) > 1:
         raise ValueError("No se pueden mezclar versiones de rúbrica en un resumen")
     total = len(rows)
-    criteria = DIMENSIONS
+    criteria = next((r["rubric_criteria"] for r in rows if r.get("rubric_criteria")), None)
+    if criteria is None:
+        observed = next((r["statement"] for r in rows if r.get("statement")), {})
+        criteria = [k for k in DIMENSIONS if k in observed] or DIMENSIONS
     result = {
         "total_generations": total,
         "evaluation_errors": sum(bool(r["error"]) for r in rows),
@@ -77,13 +80,12 @@ def export_human(source, output, *, sample=False):
                         "blind_id": key,
                         **row["request"],
                         "enunciado": (row.get("problem") or {}).get("enunciado", ""),
+                        "descripcion_figura": (row.get("problem") or {}).get(
+                            "descripcion_figura", ""
+                        ),
                         "evaluador": "",
                         "rubric_version": "",
-                        "solvability": "",
-                        "linguistic_clarity": "",
-                        "contextual_coherence": "",
-                        "pedagogical_appropriateness": "",
-                        "curriculum_alignment": "",
+                        **dict.fromkeys(DIMENSIONS, ""),
                         "request_compliance": "",
                         "incumplimientos": "",
                     }

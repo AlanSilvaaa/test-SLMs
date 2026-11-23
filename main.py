@@ -231,16 +231,42 @@ def prepare(
     typer.echo(prepare_data(dataset, benchmark, output))
 
 
+@app.command("prepare-judge")
+def prepare_judge(
+    source: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option()],
+):
+    """Recupera JSON válido del texto original y conserva las filas fallidas."""
+    from common.files import sha256
+    from judge.prepare import prepare
+
+    counts = prepare(source, output)
+    typer.echo(f"{output} ({counts}) SHA-256 {sha256(output)}")
+
+
 @app.command()
 def judge(
     config: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
     source: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
     rubric: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    batch_size: Annotated[int, typer.Option(min=1, max=128)] = 16,
+    allow_draft: Annotated[bool, typer.Option("--allow-draft")] = False,
+    check_only: Annotated[bool, typer.Option("--check-only")] = False,
 ):
-    """Evalúa enunciados y soluciones con un modelo juez cargado localmente."""
+    """Evalúa enunciados y soluciones mediante vLLM local."""
     from judge.evaluate import evaluate
 
-    typer.echo(evaluate(load_config(config), source, rubric))
+    typer.echo(
+        evaluate(
+            load_config(config),
+            source,
+            rubric,
+            batch_size=batch_size,
+            allow_draft=allow_draft,
+            check_only=check_only,
+            report=lambda message: typer.echo(message, err=True),
+        )
+    )
 
 
 @app.command("select-lora")

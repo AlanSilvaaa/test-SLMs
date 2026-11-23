@@ -18,7 +18,7 @@ problemas matemáticos para educación básica chilena con SLM offline.
   conservar la versión usada y distinguir draft de approved.
 - Evaluar el enunciado sin solución ni identidad del generador. Comprobar después
   la solución solo si el enunciado es resoluble. No agregar corrección al indicador
-  conjunto de las cinco dimensiones. Registrar ajuste a la solicitud aparte.
+  conjunto de las seis dimensiones. Registrar ajuste a la solicitud aparte.
 - Preservar dataset, validación, desarrollo y benchmark separados. No usar
   generaciones del benchmark como entrenamiento ni demostraciones.
 - Mantener los splits 34/6 por OA, semilla 42, y demostraciones únicamente de train.

@@ -1,0 +1,54 @@
+[
+  {
+    "request_id": "DEV-JUDGE-01",
+    "criterios_a_contrastar": {
+      "solvability": 1,
+      "representation_appropriateness": 1
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-02",
+    "criterios_a_contrastar": {
+      "solvability": 0
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-03",
+    "criterios_a_contrastar": {
+      "curriculum_alignment": 0
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-04",
+    "criterios_a_contrastar": {
+      "solvability": 0,
+      "representation_appropriateness": 0
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-05",
+    "criterios_a_contrastar": {
+      "solvability": 1,
+      "representation_appropriateness": 1
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-06",
+    "criterios_a_contrastar": {
+      "solution_accuracy": 0
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-07",
+    "criterios_a_contrastar": {
+      "pedagogical_appropriateness": 0,
+      "curriculum_alignment": 0
+    }
+  },
+  {
+    "request_id": "DEV-JUDGE-08",
+    "criterios_a_contrastar": {
+      "solvability": 1
+    }
+  }
+]

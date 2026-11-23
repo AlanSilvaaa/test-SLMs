@@ -11,6 +11,7 @@ DIMENSIONS = (
     "contextual_coherence",
     "pedagogical_appropriateness",
     "curriculum_alignment",
+    "representation_appropriateness",
 )
 
 
@@ -98,6 +99,7 @@ class Experiment(Contract):
     skill: str = "skill/SKILL.md"
     output: str = "output"
     seed: int = 42
+    tensor_parallel_size: int = Field(default=1, ge=1)
     gpu_memory_utilization: float = Field(default=0.85, gt=0, lt=1)
     max_model_len: int = Field(default=4096, gt=0)
     max_tokens: int = Field(default=1024, gt=0)
@@ -126,6 +128,6 @@ class Criterion(Contract):
 class Rubric(Contract):
     version: str
     status: Literal["draft", "approved"]
-    criteria: list[Criterion] = Field(min_length=5, max_length=5)
+    criteria: list[Criterion] = Field(min_length=5, max_length=6)
     solution_descriptor: str
     request_descriptor: str
