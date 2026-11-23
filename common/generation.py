@@ -127,7 +127,7 @@ def build_requests(cfg, module, shots):
     return built, inputs
 
 
-def infer(cfg, module, shots):
+def infer(cfg, module, shots, *, report=None):
     from common.excel import export_run
     from common.performance import summarize_performance
     from common.runtime import validate_model
@@ -143,20 +143,33 @@ def infer(cfg, module, shots):
         details=True,
     )
     artifacts = run / "detalles"
+    progress = {"report": report} if report else {}
+    if report:
+        report(f"Preparando el tokenizador y los prompts de {len(built)} solicitudes.")
+        report(f"Registros de esta ejecución en {artifacts}")
     engine = LocalBench(cfg, artifacts, use_adapter=module == "lora")
     try:
         write_json(artifacts / "engine.json", engine.metadata())
-        for item in built:
+        for index, item in enumerate(built, 1):
             item.update(engine.render(item["messages"]))
             base_count = engine.tokenize(conversation(item["request"]))
             item["additional_input_tokens"] = item["input_tokens"] - base_count
             append_jsonl(artifacts / "requests.jsonl", item)
+            if report and (index % 100 == 0 or index == len(built)):
+                report(f"Prompts preparados {index}/{len(built)}.")
         # Includes the pre-load baseline and startup peak, separate from each bench.
         with MemoryMonitor() as memory:
-            engine.start()
+            if report:
+                report(f"Iniciando vLLM en el puerto {cfg.port}. Detalles en serve.log.")
+            engine.start(**progress)
             for repetition in range(cfg.repetitions):
+                if report:
+                    report(
+                        f"Generando {len(built)} solicitudes con vLLM "
+                        f"(pasada {repetition + 1}/{cfg.repetitions})."
+                    )
                 results = engine.batch(
-                    [item["messages"] for item in built], seed=cfg.seed + repetition
+                    [item["messages"] for item in built], seed=cfg.seed + repetition, **progress
                 )
                 for item, result in zip(built, results, strict=True):
                     row = {
@@ -181,6 +194,8 @@ def infer(cfg, module, shots):
         write_json(artifacts / "memory.json", memory.result())
     finally:
         engine.close()
+    if report:
+        report("Generación terminada. Preparando el resumen y el Excel.")
     summarize_performance(artifacts / "generations.jsonl", artifacts / "performance.json")
     export_run(run, status="complete")
     write_json(artifacts / "status.json", {"status": "complete"})

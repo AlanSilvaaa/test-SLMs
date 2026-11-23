@@ -1,6 +1,7 @@
 """Unit tests for CLI commands and saved results; no model or server is started."""
 
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -88,7 +89,10 @@ def test_render_preserves_exact_chat_tokens_and_rejects_overflow(tmp_path):
         engine.render([])
 
 
-def test_bench_invokes_cli_and_preserves_raw_files_without_loading_models(tmp_path, monkeypatch):
+@pytest.mark.parametrize("show_progress", [False, True])
+def test_bench_invokes_cli_and_preserves_raw_files_without_loading_models(
+    tmp_path, monkeypatch, show_progress
+):
     from common.files import read_json
 
     engine = LocalBench.__new__(LocalBench)
@@ -99,7 +103,7 @@ def test_bench_invokes_cli_and_preserves_raw_files_without_loading_models(tmp_pa
         "prompt_token_ids": [1, 2],
         "input_tokens": 2,
     }
-    calls = []
+    calls, waits, progress = [], [], []
 
     class Process:
         def __init__(self, command, **kwargs):
@@ -110,12 +114,23 @@ def test_bench_invokes_cli_and_preserves_raw_files_without_loading_models(tmp_pa
             )
             output.write_text(json.dumps(native()))
 
-        def wait(self):
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            if timeout is not None and len(waits) == 1:
+                raise subprocess.TimeoutExpired("vllm bench serve", timeout)
             return 0
 
     monkeypatch.setattr("common.inference.subprocess.Popen", Process)
     monkeypatch.setattr("common.inference.stop_process", lambda process: None)
-    result = engine.batch([[{"role": "user", "content": "question"}]])
+    result = engine.batch(
+        [[{"role": "user", "content": "question"}]],
+        report=progress.append if show_progress else None,
+    )
+    if show_progress:
+        assert waits == [30, 30]
+        assert len(progress) == 1 and progress[0].startswith("vLLM sigue generando")
+    else:
+        assert waits == [None] and not progress
     assert result[0]["raw_response"] == native()["generated_texts"][0]
     command, options = calls[0]
     assert command[:3] == ["vllm", "bench", "serve"]

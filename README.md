@@ -29,7 +29,10 @@ uv run --extra infer main.py benchmark-base --benchmark data/benchmark.jsonl --m
 El comando registra `phase: benchmark_candidate`, conserva el prompt de cada
 solicitud y exporta la descripción de figura cuando el modelo la entrega. La
 prueba base usa las 725 solicitudes completas y requiere solo los datos del
-benchmark y los pesos locales para generar. Cambiar `--model` para elegir otro
+benchmark y los pesos locales para generar. La terminal muestra las etapas, el
+conteo de prompts preparados y el tiempo transcurrido cada 30 segundos durante
+el arranque y la generación. La salida detallada de vLLM se guarda en
+`detalles/serve.log` y `detalles/bench-0001/bench.log`. Cambiar `--model` para elegir otro
 SLM. Las pruebas que se usarán para ajustar el prompt, la decodificación o el
 juez se ejecutan con solicitudes de desarrollo distintas.
 

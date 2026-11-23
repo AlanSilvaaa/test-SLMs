@@ -156,7 +156,15 @@ def benchmark_base(
     from common.quick import run_benchmark_base
 
     result = run_benchmark_base(
-        benchmark, model, models_dir, revision, offline, output, port, check_only
+        benchmark,
+        model,
+        models_dir,
+        revision,
+        offline,
+        output,
+        port,
+        check_only,
+        report=lambda message: typer.echo(message, err=True),
     )
     if check_only:
         count, version = result

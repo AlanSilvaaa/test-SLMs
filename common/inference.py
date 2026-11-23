@@ -18,6 +18,7 @@ from common.runtime import check_inference_runtime
 
 VLLM_VERSION = "0.15.1"
 HOST = "127.0.0.1"
+PROGRESS_INTERVAL_S = 30
 
 
 def check_local_port(port):
@@ -335,7 +336,7 @@ class LocalBench:
             "num_warmups": 0,
         }
 
-    def start(self):
+    def start(self, *, report=None):
         # Fail on an occupied port rather than benchmarking an unrelated service.
         check_local_port(self.port)
         command = serve_command(self.cfg, self.port, self.use_adapter)
@@ -348,8 +349,13 @@ class LocalBench:
             env=offline_environment(),
             start_new_session=True,
         )
-        deadline = time.monotonic() + self.cfg.ready_timeout_s
-        while time.monotonic() < deadline:
+        started = time.monotonic()
+        deadline = started + self.cfg.ready_timeout_s
+        next_report = started + PROGRESS_INTERVAL_S
+        while (now := time.monotonic()) < deadline:
+            if report and now >= next_report:
+                report(f"vLLM sigue iniciando ({int(now - started)} s transcurridos).")
+                next_report = now + PROGRESS_INTERVAL_S
             if self.process.poll() is not None:
                 raise RuntimeError(server_failure(self.run / "serve.log", self.process.returncode))
             try:
@@ -359,7 +365,7 @@ class LocalBench:
                 time.sleep(0.2)
         raise RuntimeError("vllm serve no abrió el puerto dentro del plazo; revisa serve.log")
 
-    def batch(self, messages, *, seed=None, temperature=None, schema=None):
+    def batch(self, messages, *, seed=None, temperature=None, schema=None, report=None):
         rendered = [self.render(m) for m in messages]
         self.counter += 1
         folder = self.run / f"bench-{self.counter:04d}"
@@ -391,7 +397,17 @@ class LocalBench:
                         env=offline_environment(),
                         start_new_session=True,
                     )
-                    code = process.wait()
+                    if report:
+                        started = time.monotonic()
+                        while True:
+                            try:
+                                code = process.wait(timeout=PROGRESS_INTERVAL_S)
+                                break
+                            except subprocess.TimeoutExpired:
+                                elapsed = int(time.monotonic() - started)
+                                report(f"vLLM sigue generando ({elapsed} s transcurridos).")
+                    else:
+                        code = process.wait()
                 write_json(folder / "memory.json", memory.result())
             finally:
                 stop_process(process)

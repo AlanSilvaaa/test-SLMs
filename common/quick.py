@@ -48,7 +48,9 @@ def run_quick(
     return infer(cfg, "base_model", 0)
 
 
-def run_benchmark_base(benchmark, model, models_dir, revision, offline, output, port, check_only):
+def run_benchmark_base(
+    benchmark, model, models_dir, revision, offline, output, port, check_only, *, report=None
+):
     from common.generation import build_requests, infer
 
     cfg = Experiment(
@@ -60,12 +62,17 @@ def run_benchmark_base(benchmark, model, models_dir, revision, offline, output, 
         repetitions=1,
         port=port,
     )
+    if report:
+        report(f"Validando solicitudes en {cfg.benchmark}")
     built, _ = build_requests(cfg, "base_model", 0)
+    count, version = len(built), built[0]["request"]["version"]
     if check_only:
-        return len(built), built[0]["request"]["version"]
+        return count, version
+    if report:
+        report(f"Benchmark {version} validado ({count} solicitudes). Preparando pesos de {model}.")
     check_inference_runtime()
     check_local_port(port)
     cfg.model = prepare_model(model, models_dir, revision, offline=offline)
     if "SmolLM3" in (cfg.model.id or ""):
         cfg.chat_template_kwargs = {"enable_thinking": False}
-    return infer(cfg, "base_model", 0)
+    return infer(cfg, "base_model", 0, report=report)
